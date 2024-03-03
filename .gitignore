@@ -1,2 +1,4 @@
 env
 configuration.yaml
+logs/*
+!logs/.keep
