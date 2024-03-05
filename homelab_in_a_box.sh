@@ -47,7 +47,7 @@ install_package vim
 install_package git
 
 # Clone the HIAB repository 
-if git clone https://github.com/JustOneMoreDog/HomeLabInABox.git; then
+if git clone https://github.com/JustOneMoreDog/HomeLabInABox.git -b HIAB-Python-Design; then
   cd HomeLabInABox
 else
   echo "ERROR: Failed to clone HomeLabInABox repository."
