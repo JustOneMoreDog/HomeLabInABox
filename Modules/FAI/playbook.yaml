@@ -1,0 +1,45 @@
+---
+- hosts: localhost
+  connection: local
+  tasks:
+    - name: Install FAI server dependencies
+      apt:
+        name: "{{ packages }}"
+        state: present
+      vars:
+        packages:
+          - apache2
+          - fai-quickstart
+          - fai-doc
+          - fai-server
+          - isc-dhcp-server
+          - tftpd-hpa
+          - nfs-kernel-server
+          - syslinux-common
+          - debmirror
+
+    - name: Create symlink for Debian mirror
+      file:
+        src: /files/scratch/debmirror
+        dest: /var/www/debmirror
+        state: link
+
+    - name: Run mkdebmirror utility
+      command: /usr/share/doc/fai-doc/examples/utils/mkdebmirror
+
+    - name: Restart Apache service
+      service:
+        name: apache2
+        state: restarted
+
+    - name: Update /etc/hosts file
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ item }}"
+        create: yes
+        state: present
+      with_items:
+        - "{{ bootstrapper_ip }} {{ bootstrapper_hostname }}" 
+        - "{{ pve_ip_address }} {{ pve_hostname }}"
+    
+

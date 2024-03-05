@@ -1,0 +1,19 @@
+- name: Restart DHCP
+  service:
+    name: isc-dhcp-server
+    state: restarted
+
+- name: Restart Apache
+  service:
+    name: apache2
+    state: restarted
+
+- name: Restart NFS
+  service:
+    name: nfs-kernel-server
+    state: restarted
+
+- name: Restart TFTP
+  service:
+    name: tftpd-hpa
+    state: restarted

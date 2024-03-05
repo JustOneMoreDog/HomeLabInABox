@@ -6,7 +6,7 @@ variables:
 modules: 
   - name: Proxmox
     vars:
-      hostname: {{ proxmox_hostname }} 
+      hostname: {{ proxmox_hostname }}
   - name: VyOS
     vars:
       wan_ip: {{ vyos_wan_ip }} 

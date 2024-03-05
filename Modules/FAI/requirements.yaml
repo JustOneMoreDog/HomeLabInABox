@@ -1,3 +1,6 @@
 dependencies:
-  - PXE
-  - Ansible
+  - Bootstrapper
+variables:
+  - pve_hostname
+  - pve_ip_address
+  - pve_mac_address

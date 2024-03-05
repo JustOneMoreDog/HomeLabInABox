@@ -1,0 +1,5 @@
+dependencies:
+  - None
+variables:
+  - bootstrapper_ip
+  - bootstrapper_hostname

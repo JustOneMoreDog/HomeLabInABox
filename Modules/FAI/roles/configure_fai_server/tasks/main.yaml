@@ -1,0 +1,27 @@
+- name: Template FAI configuration
+  template:
+    src: fai.conf.j2
+    dest: /etc/fai/fai.conf
+
+- name: Template NFS configuration
+  template:
+    src: nfsroot.conf.j2
+    dest: /etc/fai/nfsroot.conf
+  notify: Restart NFS
+
+- name: Template Apt Sources configuration
+  template:
+    src: sources.list.j2
+    dest: /etc/fai/apt/sources.list
+
+- name: Template DHCP configuration
+  template:
+    src: dhcpd.conf.j2
+    dest: /etc/dhcp/dhcpd.conf
+  notify: Restart DHCP
+
+- name: Template TFTP configuration
+  template:
+    src: tftpd-hpa.j2
+    dest: /etc/default/tftpd-hpa
+  notify: Restart TFTP

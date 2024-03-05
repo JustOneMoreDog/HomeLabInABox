@@ -1,5 +1,0 @@
-dependencies:
-  - PXE
-  - Ansible
-variables:
-  - proxmox_hostname

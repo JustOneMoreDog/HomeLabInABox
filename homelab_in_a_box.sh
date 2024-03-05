@@ -42,8 +42,7 @@ fi
 
 # Install dependencies
 install_package python3.12
-install_package python3-venv 
-install_package ansible
+install_package python3.12-venv 
 install_package vim
 install_package git
 
@@ -75,4 +74,4 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # Run the main HIAB program
-python HomeLabInABox.py 
+# python HomeLabInABox.py 
