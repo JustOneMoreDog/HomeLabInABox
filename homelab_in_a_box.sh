@@ -15,7 +15,7 @@ install_package() {
   else
     echo "Installing $1..."  
     if command -v apt-get &> /dev/null; then
-      apt-get update && apt-get install -y $1  
+      apt-get update -y && apt-get install -y $1  
     elif command -v yum &> /dev/null; then
       yum install -y $1
     else
@@ -41,10 +41,12 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # Install dependencies
-install_package python3.12
-install_package python3.12-venv 
+install_package python3.11
+install_package python3.11-venv 
 install_package vim
 install_package git
+
+
 
 # Clone the HIAB repository 
 if git clone https://github.com/JustOneMoreDog/HomeLabInABox.git -b HIAB-Python-Design; then
