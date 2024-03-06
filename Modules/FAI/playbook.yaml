@@ -1,6 +1,4 @@
----
 - hosts: localhost
-  connection: local
   tasks:
     - name: Install FAI server dependencies
       apt:
@@ -24,22 +22,17 @@
         dest: /var/www/debmirror
         state: link
 
-    - name: Run mkdebmirror utility
-      command: /usr/share/doc/fai-doc/examples/utils/mkdebmirror
-
-    - name: Restart Apache service
-      service:
-        name: apache2
-        state: restarted
+    # - name: Run mkdebmirror utility
+    #   command: /usr/share/doc/fai-doc/examples/utils/mkdebmirror
 
     - name: Update /etc/hosts file
-      lineinfile:
-        path: /etc/hosts
-        line: "{{ item }}"
-        create: yes
-        state: present
-      with_items:
-        - "{{ bootstrapper_ip }} {{ bootstrapper_hostname }}" 
-        - "{{ pve_ip_address }} {{ pve_hostname }}"
-    
+      include_role:
+        name: configure_etc_hosts
+      vars:
+        ip_address: "{{ bootstrapper_ip }}"
+        hostname: "{{ bootstrapper_hostname }}"
+        remove: false
 
+    - name: Template configuration files
+      include_role:
+        name: configure_fai

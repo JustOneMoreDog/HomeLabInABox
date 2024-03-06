@@ -1,0 +1,7 @@
+dependencies:
+  - FAI
+  - Bootstrapper
+variables:
+  - pve_hostname
+  - pve_ip_address
+  - pve_mac_address

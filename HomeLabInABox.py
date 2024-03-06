@@ -116,6 +116,13 @@ class HomeLabInABox:
         logging.info("Getting deployment order")
         deployment_order = self.get_deployment_order()
         print(f"Deployment order is: '{' -> '.join(deployment_order)}'")
+        # TO-DO: Figure out how we want to construct our master playbook?
+        '''
+        Do we combine all the playbooks from each module into a single playbook?      < maybe?
+        Do we copy the playbook into the project root and execute it?                 < meh
+        Is it possible to use the Ansible API to execute a module's playbook in CWD?  < considering..... 
+                                          ^ Dan ****creams**** his jeans here
+        '''
         return
 
 if __name__ == '__main__':

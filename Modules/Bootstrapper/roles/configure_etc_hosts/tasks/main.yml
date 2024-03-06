@@ -1,0 +1,6 @@
+- name: Update /etc/hosts file
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ ip_address }} {{ hostname }}"
+    create: yes
+    state: "{{ 'present' if remove == false else 'absent' }}"

@@ -1,0 +1,10 @@
+- name: Manage DHCP host configuration
+  blockinfile:
+    path: /etc/dhcp/dhcpd.conf
+    block: | 
+      host {{ hostname }} {
+        hardware ethernet {{ mac_address }};
+        fixed-address {{ ip_address }};
+      }
+    state: "{{ 'present' if remove == false else 'absent' }}"
+  notify: Restart DHCP

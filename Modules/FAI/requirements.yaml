@@ -1,6 +1,6 @@
 dependencies:
   - Bootstrapper
 variables:
-  - pve_hostname
-  - pve_ip_address
-  - pve_mac_address
+  - bootstrapper_ip
+  - bootstrapper_hostname
+  - homelab_domain_name
