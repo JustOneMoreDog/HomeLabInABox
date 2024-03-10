@@ -45,7 +45,7 @@ install_package python3.11
 install_package python3.11-venv 
 install_package vim
 install_package git
-
+install_package yamllint
 
 
 # Clone the HIAB repository 
@@ -62,18 +62,3 @@ source env/bin/activate
 
 # Install HIAB requirements
 pip install -r requirements.txt 
-
-# Configuration setup
-if [ ! -f configuration.yaml ]; then
-  cp configuration_default.yaml configuration.yaml
-  echo "Copied default configuration to configuration.yaml"
-fi
-
-# Configuration editing
-read -p "Edit default configuration.yaml? (y/n) " -r
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-  vim configuration.yaml
-fi
-
-# Run the main HIAB program
-# python HomeLabInABox.py 

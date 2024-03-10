@@ -2,6 +2,10 @@ import networkx as nx
 import yaml
 import os
 import logging
+import argparse
+import sys
+import subprocess
+from AnsibleWrapper import AnsibleWrapper
 
 class ModuleConfigurationError(Exception):
     """Raised when a module configuration is invalid."""
@@ -11,11 +15,11 @@ class ModuleConfigurationError(Exception):
 class HomeLabInABox:
     def __init__(self):
         self.setup_logging()
-        self.configuration_variables, self.desired_modules = self.get_configuration()
-        if not self.desired_modules:
-            raise ModuleConfigurationError(f"You must have at least 1 module selected")
+        self.desired_module_names = []
+        self.desired_modules = []
         self.dependency_graph = nx.DiGraph()
-        self.loaded_modules = []  
+        self.configuration = {}
+        self.all_modules = self.get_all_modules()
 
     def setup_logging(self) -> None:
         # Replace the placeholder below with your logging configuration
@@ -26,9 +30,25 @@ class HomeLabInABox:
             with open(yaml_path, 'r') as f:
                 return yaml.safe_load(f)
         except FileNotFoundError:
-            raise ModuleConfigurationError(f"YAML file '{yaml_path}' not found.")
+            raise FileNotFoundError(f"YAML file '{yaml_path}' not found.")
         except yaml.YAMLError as e:
-            raise ModuleConfigurationError(f"Invalid YAML in file '{yaml_path}': \n{e}")
+            raise yaml.YAMLError(f"Invalid YAML in file '{yaml_path}': \n{e}")
+    
+    def save_yaml(self, filepath: str, data: dict) -> None:
+        if not isinstance(data, dict):
+            raise TypeError("The 'data' argument must be a dictionary.")
+        try:
+            if not os.path.isabs(filepath):
+                filepath = os.path.abspath(os.path.join(os.getcwd(), filepath))
+            # Create any necessary directories in the path
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            with open(filepath, 'w') as outfile:
+                yaml.safe_dump(data, outfile, default_flow_style=False, sort_keys=False)
+        except OSError as e:
+            raise OSError(f"Error saving YAML file '{filepath}': {e}")
+        except yaml.YAMLError as e:
+            raise yaml.YAMLError(f"Error serializing data to YAML: {e}") 
+        os.path
 
     def get_configuration(self) -> tuple[dict, list]:
         config_path = 'configuration.yaml'
@@ -49,9 +69,9 @@ class HomeLabInABox:
             return
         for dependency in module_dependencies:
             logging.info(f"Adding '{dependency}' as dependency for '{module_name}'")
-            if dependency not in self.desired_modules:
-                logging.info(f"Adding '{dependency}' to modules list")
-                self.desired_modules.append({'name': dependency, 'vars': {}})
+            if dependency not in self.desired_module_names:
+                logging.info(f"Adding '{dependency}' to desired module names list")
+                self.desired_module_names.append(dependency)
             self.dependency_graph.add_edge(dependency, module_name)
             self.check_for_cycles()
 
@@ -89,7 +109,7 @@ class HomeLabInABox:
                 # TO-DO: How do we handle modules that have duplicate named roles?
                 logging.warning(f"Role '{role_name}' already exists in the main 'roles' directory.")
                 continue
-            print(f"Source: '{source_role}', Destination: '{target_role}'")
+            logging.debug(f"Source: '{source_role}', Destination: '{target_role}'")
             os.symlink(src=source_role, dst=target_role, target_is_directory=True)
             logging.info(f"Linked role '{role_name}' from module '{module_name}'.")   
     
@@ -103,12 +123,158 @@ class HomeLabInABox:
         self.verify_module_variables(module_variables, module['name'])
         self.add_module_dependencies_to_graph(module_dependencies, module['name'])
 
-    def deploy_homelab(self) -> None:
-        logging.info("Loading modules")
+    def execute_ansible_playbooks(self, modules: list[str]) -> None:
+        for module in modules:
+            playbook = self.get_module_playbook(module)
+            inventory = self.get_module_inventory(module, playbook)
+            ansible_runner = AnsibleWrapper(inventory=inventory, playbook=playbook)
+            logging.info("Executing the '{module}' playbook")
+            ansible_runner.run()
+
+    def get_all_modules(self) -> list[dict]:
+        specs = []
+        for module in os.listdir("Modules"):
+            module_path = os.path.join("Modules", module)
+            if not os.path.isdir(module_path) or module == ".template":
+                continue
+            spec_path = os.path.join(module_path, "spec.yaml")
+            spec = self.load_yaml(spec_path)
+            spec['name'] = module
+            specs.append(spec)
+        return specs
+    
+    def gather_modules(self, refresh_available_modules: bool = False) -> None:
+        logging.info("Gathering modules")
+        if refresh_available_modules:
+            modules = self.load_yaml('module_choices.yaml')
+            modules['available_modules'] = []
+        else:
+            modules = {
+                'wanted_modules': ['Put your desired modules here', '', ''],
+                'available_modules': []
+            }
+        for module in self.all_modules:
+            modules['available_modules'].append(
+                {
+                    'Name': module['name'],
+                    'Description': module['description']
+                }
+            )
+        self.save_yaml('module_choices.yaml', modules)
+
+    def validate_modules(self) -> bool:
+        logging.info("Validating modules")
+        valid = True
+        module_choices = self.get_desired_modules()
+        for module in self.desired_module_names:
+            # TO-DO: More robust checking for accidental user input
+            if not module:
+                continue
+            a_valid_module_choice = any(x["name"] == module for x in self.all_modules)
+            if not a_valid_module_choice:
+                valid = False
+                module_choices['wanted_modules'][module] = module + " <--- invalid"
+        if not valid:
+            self.save_yaml('module_choices.yaml', module_choices)        
+        return valid
+    
+    def get_desired_modules(self) -> dict:
+        self.desired_module_names = []
+        module_choices = self.load_yaml('module_choices.yaml')
+        for chosen_module in module_choices['wanted_modules']:
+            # TO-DO: More robust checking for accidental user input
+            if not chosen_module:
+                continue
+            module = chosen_module.strip()
+            self.desired_module_names.append(module)
+        return module_choices
+    
+    def get_module_spec(self, target_module: str) -> dict:
+        for module in self.all_modules:
+            if module["name"] == target_module:
+                return module
+
+    def process_modules(self) -> None:
+        self.desired_modules = []
+        self.dependency_graph = nx.DiGraph()
+        for module_name in self.desired_module_names:
+            spec = self.get_module_spec(module_name)
+            self.desired_modules.append(spec)
+            self.add_module_dependencies_to_graph(spec["dependencies"], spec["name"])
+
+    def order_desired_modules(self) -> None:
+        deployment_order = self.get_deployment_order()
+        def custom_key(item):
+            return deployment_order.index(item["name"]) if item["name"] in deployment_order else len(deployment_order)
+        sorted_modules = sorted(self.desired_modules, key=custom_key)
+        self.desired_modules = sorted_modules
+
+    def load_desired_modules(self) -> None:
+        # Build our initial list of desired_module_names
+        _ = self.get_desired_modules()
+        # Use that list to get all their dependencies, add them to a graph, and then get the module's spec
+        self.process_modules()
+        # Now we order the modules based on which dependencies come first
+        self.order_desired_modules()
+    
+    def build_configuration_file(self, refresh_available_configuration: bool = False) -> None:
+        if refresh_available_configuration:
+            configuration_file = self.load_yaml('configuration.yaml')
+        else:
+            configuration_file = {
+                "Modules": []
+            }
+        self.load_desired_modules()
         for module in self.desired_modules:
-            self.validate_module(module['name'])
-            self.load_module(module)
-        self.check_for_cycles()
+            configuration_block = {
+                "Name": module["name"],
+                "Required Variables": [{
+                    "Name": v["name"],
+                    "Description": v["description"],
+                    "Value": v["default"]
+                } for v in module["required_variables"]]
+            }
+            # TO-DO: Make this more robust. We are only adding it in if the name does not exist. But if the name exists we should verify the variables block
+            config_block_exists = any(x["Name"] == configuration_block["Name"] for x in configuration_file["Modules"])
+            if config_block_exists:
+                logging.info(f"Skipping '{module["name"]}' since it already exists in the configuration file")
+            else:
+                configuration_file["Modules"].append(configuration_block)
+        self.save_yaml("configuration.yaml", configuration_file)
+
+    def get_configuration(self) -> None:
+        self.configuration = self.load_yaml("configuration.yaml")
+    
+    def validate_configuration_file(self) -> bool:
+        valid = True
+        self.load_desired_modules()
+        self.get_configuration()
+        type_mappings = {
+            "str": str,
+            "list": list,
+            "int": int,
+            "bool": bool,
+            "dict": dict
+        }
+        for i, module in enumerate(self.configuration["Modules"]):
+            module_spec = self.get_module_spec(module["Name"])
+            for j, variable in enumerate(module["Required Variables"]):
+                valid_name = any(x["name"] == variable["Name"] for x in module_spec["required_variables"])
+                if not valid_name:
+                    valid = False
+                    invalid_name = self.configuration["Modules"][i]["Required Variables"][j]["Name"]
+                    self.configuration["Modules"][i]["Required Variables"][j]["Name"] = invalid_name + f" <--- unexpected name, expected one of these '{','.join([v["name"] for v in module_spec["variables"]])}'"
+                expected_type = type_mappings[module_spec['required_variables'][j]["type"]]
+                valid_value = isinstance(variable["Value"], expected_type)
+                if not valid_value:
+                    valid = False
+                    invalid_value = self.configuration["Modules"][i]["Required Variables"][j]["Value"] 
+                    self.configuration["Modules"][i]["Required Variables"][j]["Name"] = invalid_value + f" <--- invalid type, expected a '{module_spec["type"]}')"
+        if not valid:
+            self.save_yaml('configuration.yaml', self.configuration)
+        return valid
+
+    def deploy_homelab(self) -> None:
         # Now that we have validated all the modules we can symlink their roles into our main roles folder
         logging.info("Linking roles")
         for module in self.desired_modules:
@@ -116,15 +282,102 @@ class HomeLabInABox:
         logging.info("Getting deployment order")
         deployment_order = self.get_deployment_order()
         print(f"Deployment order is: '{' -> '.join(deployment_order)}'")
-        # TO-DO: Figure out how we want to construct our master playbook?
-        '''
-        Do we combine all the playbooks from each module into a single playbook?      < maybe?
-        Do we copy the playbook into the project root and execute it?                 < meh
-        Is it possible to use the Ansible API to execute a module's playbook in CWD?  < considering..... 
-                                          ^ Dan ****creams**** his jeans here
-        '''
+        # self.execute_ansible_playbooks(deployment_order)
         return
 
-if __name__ == '__main__':
+
+def main(args: argparse.Namespace) -> int:
     hiab = HomeLabInABox()
+    # Module Choices Logic
+    if os.path.exists("module_choices.yaml"):
+        print("Existing module choices file found")
+        choice = input("Would you like to modify it? (y/n): ")
+        if choice.lower() == 'y':
+            hiab.gather_modules(refresh_available_modules=True)
+            subprocess.call(['vim', 'module_choices.yaml'])    
+    else:
+        print("No module choices have been made yet building list of available modules")
+        hiab.gather_modules()
+        input("When ready hit enter and then pick out the modules you would like to have: ")
+        subprocess.call(['vim', 'module_choices.yaml']) 
+
+    # Module Validation Loop
+    while True:
+        if hiab.validate_modules():
+            print("Module choices are valid")
+            break
+        logging.warn("Invalid module section detected throwing it back to user")
+        subprocess.call(['vim', 'module_choices.yaml'])
+
+    # Configuration Logic
+    if os.path.exists("configuration.yaml"):
+        print("Existing configuration file found")
+        choice = input("Would you like to modify it? (y/n): ")
+        if choice.lower() == 'y':
+            hiab.build_configuration_file(refresh_available_configuration=True)
+            subprocess.call(['vim', 'module_choices.yaml'])    
+    else:
+        print("Configuration file does not exist building one now")
+        hiab.build_configuration_file()
+        input("When ready hit enter and then fill out the configuration file with the values of your choice: ")
+        subprocess.call(['vim', 'configuration.yaml']) 
+
+    # Configuration Validation Loop
+    while True:
+        if hiab.validate_configuration_file():
+            print("Configuration file is valid")
+            break
+        logging.warn("Invalid configuration file detected throwing it back to user")
+        subprocess.call(['vim', 'configuration.yaml'])
+    
+    print("Preflight checks complete. Deploying the HomeLabInABox!")
     hiab.deploy_homelab()
+    return 0
+
+# def main(args: argparse.Namespace) -> int:
+#     hiab = HomeLabInABox()
+#     if args.gather_modules:
+#         hiab.gather_modules()
+#         return 0
+#     elif args.validate_modules:
+#         if not hiab.validate_modules():
+#             logging.warn("Invalid module section detected throwing it back to user")
+#             return -1
+#         return 0
+#     elif args.build_configuration:
+#         hiab.build_configuration_file()
+#         return 0
+#     elif args.validate_configuration:
+#         logging.info("Validating configuration...")
+#         if not hiab.validate_configuration_file():
+#             logging.warn("Invalid configuration file detected throwing it back to user")
+#             return -1
+#         return 0
+#     elif args.deploy_homelab:
+#         logging.info("Deploying homelab...")
+#         hiab.deploy_homelab()
+#     else:
+#         logging.info("No valid arguments provided. Use --help for options.")
+
+if __name__ == '__main__':
+    os.chdir("/home/sandwich/CompanyInABox/HomeLabInABox")
+    parser = argparse.ArgumentParser(description='A script to manage a modular homelab deployment.')
+    parser.add_argument('--gather-modules', 
+                    action='store_true',
+                    help='Gather and display a list of available modules for the user.')
+    parser.add_argument('--validate-modules',
+                    action='store_true', 
+                    help='Validates that the user has requested valid and existing modules.')
+    parser.add_argument('--build-configuration',
+                    action='store_true', 
+                    help='Builds the needed configuration file based on user module selection.')
+    parser.add_argument('--validate-configuration',
+                    action='store_true',
+                    help='Validates that the user has provided correct configuration settings for the selected modules.')
+    parser.add_argument('--deploy-homelab', 
+                    action='store_true',
+                    help='Executes the selected modules with their configuration to deploy the homelab.')
+    args = parser.parse_args()
+    return_code = main(args)
+    logging.info(f"Execution ending with {return_code}")
+    sys.exit(return_code)

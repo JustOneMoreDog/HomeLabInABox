@@ -1,6 +1,0 @@
-dependencies:
-  - Bootstrapper
-variables:
-  - bootstrapper_ip
-  - bootstrapper_hostname
-  - homelab_domain_name
