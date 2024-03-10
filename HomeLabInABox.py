@@ -140,8 +140,7 @@ class HomeLabInABox:
         if just_local_host:
             return inventory
         else:
-            filepath = 
-            return filepath
+            return self.terraform_inventory
              
     def execute_ansible_playbooks(self, modules: list[str]) -> None:
         for module in modules:
