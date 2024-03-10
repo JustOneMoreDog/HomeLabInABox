@@ -20,6 +20,7 @@ class HomeLabInABox:
         self.dependency_graph = nx.DiGraph()
         self.configuration = {}
         self.terraform_inventory = os.path.abspath(os.path.join(os.getcwd(), "inventory", "terraform_inventory.yaml"))
+        self.roles_directory = os.path.abspath(os.path.join(os.getcwd(), "roles"))
         self.all_modules = self.get_all_modules()
 
     def setup_logging(self) -> None:
@@ -131,22 +132,20 @@ class HomeLabInABox:
         playbook_data = self.load_yaml(playbook_path)
         return playbook_data
 
-    def get_module_inventory(self, module: str, playbook: list[dict]) -> dict | str:
-        inventory = {}
+    def get_module_inventory(self, playbook: list[dict]) -> str:
         just_local_host = True
         for play in playbook:
             if play['hosts'] != 'localhost':
                 just_local_host = False
-        if just_local_host:
-            return inventory
-        else:
+        if not just_local_host:
             return self.terraform_inventory
+        return ''
              
     def execute_ansible_playbooks(self, modules: list[str]) -> None:
         for module in modules:
             playbook = self.get_module_playbook(module)
-            inventory = self.get_module_inventory(module, playbook)
-            ansible_runner = AnsibleWrapper(inventory=inventory, playbook=playbook)
+            inventory = self.get_module_inventory(playbook)
+            ansible_runner = AnsibleWrapper(inventory=inventory, playbook=playbook, roles_directory=self.roles_directory)
             logging.info("Executing the '{module}' playbook")
             ansible_runner.run()
 

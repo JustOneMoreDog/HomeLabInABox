@@ -14,9 +14,10 @@ class DataParsingException(Exception):
 
 
 class AnsibleWrapper:
-    def __init__(self, inventory: dict, playbook: dict):
+    def __init__(self, inventory: dict, playbook: dict, roles_directory: str):
         self.inventory = inventory
         self.playbook = playbook
+        self.roles_directory = roles_directory
         self.event_data = dict()
 
     def run(self) -> None:
@@ -27,7 +28,8 @@ class AnsibleWrapper:
                 playbook=self.playbook,
                 inventory=self.inventory,
                 artifact_dir='logs/ansible-runner',
-                json_mode=True
+                json_mode=True,
+                roles_path=self.roles_directory
             )
         if runner.rc != 0:
             raise AnsibleRunTimeExecution("")
