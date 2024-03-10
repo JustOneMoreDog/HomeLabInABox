@@ -139,7 +139,7 @@ class HomeLabInABox:
                 just_local_host = False
         if not just_local_host:
             return self.terraform_inventory
-        return ''
+        return '/dev/null'
              
     def execute_ansible_playbooks(self, modules: list[str]) -> None:
         for module in modules:

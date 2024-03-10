@@ -22,6 +22,7 @@
         src: /files/scratch/debmirror
         dest: /var/www/debmirror
         state: link
+        force: true
 
     # - name: Run mkdebmirror utility
     #   command: /usr/share/doc/fai-doc/examples/utils/mkdebmirror

@@ -29,7 +29,12 @@ class AnsibleWrapper:
                 inventory=self.inventory,
                 artifact_dir='logs/ansible-runner',
                 json_mode=True,
-                roles_path=self.roles_directory
+                roles_path=self.roles_directory,
+                # Warnings will not be in JSON format and thus break everything
+                envvars = {
+                    "ANSIBLE_LOCALHOST_WARNING": False,
+                    "ANSIBLE_INVENTORY_UNPARSED_WARNING": False,    
+                }
             )
         if runner.rc != 0:
             raise AnsibleRunTimeExecution("")
