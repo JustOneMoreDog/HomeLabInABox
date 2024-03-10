@@ -1,0 +1,17 @@
+description: "Uses FAI to PXE boot your hypervisor and install Proxmox on it"
+dependencies:
+  - FAI
+  - Bootstrapper
+required_variables:
+  - name: pve_hostname
+    description: 'Hostname for your Proxmox hypervisor'
+    type: str
+    default: "box00"
+  - name: pve_ip_address
+    description: 'IP address for your Proxmox hypervisor management port'
+    type: str
+    default: "192.168.0.5"
+  - name: pve_mac_address
+    description: 'MAC address of you Proxmox hypervisor'
+    type: str
+    default: "aa-bb-cc-dd-ee-ff"

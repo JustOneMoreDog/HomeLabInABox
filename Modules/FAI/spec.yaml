@@ -1,0 +1,8 @@
+description: "FAI handles the automation of host provisioning"
+dependencies:
+  - Bootstrapper
+required_variables:
+  - name: homelab_domain_name
+    description: 'Domain name for your homelab'
+    type: str
+    default: "homelabinabox.net"

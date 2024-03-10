@@ -1,0 +1,18 @@
+- hosts: localhost
+  tasks:
+    - name: Update /etc/hosts file
+      include_role:
+        name: configure_etc_hosts
+      vars:
+        ip_address: "{{ pve_ip_address }}"
+        hostname: "{{ pve_hostname }}"
+        remove: false
+
+    - name: Add hypervisor to DHCP hosts
+      include_role:
+        name: configure_dhcp_hosts
+      vars:
+        hostname: "{{ pve_hostname }}"
+        ip_address: "{{ pve_ip_address }}"
+        mac_address: "{{ pve_mac_address }}"
+        remove: false

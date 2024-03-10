@@ -5,7 +5,7 @@ Automated deployment and configuration of a modular home lab
 ## One Button Deploy
 
 ```bash
-curl https://raw.githubusercontent.com/JustOneMoreDog/HomeLabInABox/main/homelab_in_a_box.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/JustOneMoreDog/HomeLabInABox/HIAB-Python-Design/homelab_in_a_box.sh)
 ```
 
 ## Bootstrapping

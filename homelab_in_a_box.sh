@@ -15,7 +15,7 @@ install_package() {
   else
     echo "Installing $1..."  
     if command -v apt-get &> /dev/null; then
-      apt-get update && apt-get install -y $1  
+      apt-get update -y && apt-get install -y $1  
     elif command -v yum &> /dev/null; then
       yum install -y $1
     else
@@ -41,14 +41,15 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # Install dependencies
-install_package python3.12
-install_package python3-venv 
-install_package ansible
+install_package python3.11
+install_package python3.11-venv 
 install_package vim
 install_package git
+install_package yamllint
+
 
 # Clone the HIAB repository 
-if git clone https://github.com/JustOneMoreDog/HomeLabInABox.git; then
+if git clone https://github.com/JustOneMoreDog/HomeLabInABox.git -b HIAB-Python-Design; then
   cd HomeLabInABox
 else
   echo "ERROR: Failed to clone HomeLabInABox repository."
@@ -61,18 +62,3 @@ source env/bin/activate
 
 # Install HIAB requirements
 pip install -r requirements.txt 
-
-# Configuration setup
-if [ ! -f configuration.yaml ]; then
-  cp configuration_default.yaml configuration.yaml
-  echo "Copied default configuration to configuration.yaml"
-fi
-
-# Configuration editing
-read -p "Edit default configuration.yaml? (y/n) " -r
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-  vim configuration.yaml
-fi
-
-# Run the main HIAB program
-python HomeLabInABox.py 

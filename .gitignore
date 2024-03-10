@@ -1,2 +1,8 @@
 env
+module_choices.yaml
 configuration.yaml
+answer.md
+logs/*
+!logs/.keep
+roles/*
+!roles/.keep

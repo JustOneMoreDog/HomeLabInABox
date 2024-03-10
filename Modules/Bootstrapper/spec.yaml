@@ -1,0 +1,12 @@
+description: "Orchestrates the entire deployment and configuration of the homelab and will always be included."
+dependencies:
+  - None
+required_variables:
+  - name: bootstrapper_hostname
+    description: 'Hostname for your bootstrapper'
+    type: str
+    default: "bootstrappa"
+  - name: bootstrapper_ip
+    description: 'IP address for your bootstrapper'
+    type: str
+    default: "192.168.0.10"

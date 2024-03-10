@@ -1,0 +1,38 @@
+- hosts: localhost
+  tasks:
+    - name: Install FAI server dependencies
+      apt:
+        name: "{{ packages }}"
+        state: present
+      vars:
+        packages:
+          - apache2
+          - fai-quickstart
+          - fai-doc
+          - fai-server
+          - isc-dhcp-server
+          - tftpd-hpa
+          - nfs-kernel-server
+          - syslinux-common
+          - debmirror
+
+    - name: Create symlink for Debian mirror
+      file:
+        src: /files/scratch/debmirror
+        dest: /var/www/debmirror
+        state: link
+
+    # - name: Run mkdebmirror utility
+    #   command: /usr/share/doc/fai-doc/examples/utils/mkdebmirror
+
+    - name: Update /etc/hosts file
+      include_role:
+        name: configure_etc_hosts
+      vars:
+        ip_address: "{{ bootstrapper_ip }}"
+        hostname: "{{ bootstrapper_hostname }}"
+        remove: false
+
+    - name: Template configuration files
+      include_role:
+        name: configure_fai

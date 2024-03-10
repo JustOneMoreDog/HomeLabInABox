@@ -1,0 +1,5 @@
+- name: Update system packages
+  become: true
+  apt: 
+    upgrade: yes
+    update_cache: yes
