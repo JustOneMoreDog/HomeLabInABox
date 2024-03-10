@@ -131,7 +131,9 @@ class HomeLabInABox:
     def get_module_playbook(self, module: str) -> dict:
         playbook_path = os.path.join("Modules", module, "playbook.yaml")
         playbook_data = self.load_yaml(playbook_path)
-        playbook_data["vars"] = self.configuration_variables
+        # TO-DO: Handle the situation where the playbook already has vars defined (it really shouldn't though)
+        for play in playbook_data:
+            play["vars"] = self.configuration_variables
         return playbook_data
 
     def get_module_inventory(self, playbook: list[dict]) -> str:
