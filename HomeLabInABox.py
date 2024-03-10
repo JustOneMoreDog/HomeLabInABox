@@ -21,6 +21,7 @@ class HomeLabInABox:
         self.configuration = {}
         self.terraform_inventory = os.path.abspath(os.path.join(os.getcwd(), "inventory", "terraform_inventory.yaml"))
         self.roles_directory = os.path.abspath(os.path.join(os.getcwd(), "roles"))
+        self.configuration_variables = []
         self.all_modules = self.get_all_modules()
 
     def setup_logging(self) -> None:
@@ -130,6 +131,7 @@ class HomeLabInABox:
     def get_module_playbook(self, module: str) -> dict:
         playbook_path = os.path.join("Modules", module, "playbook.yaml")
         playbook_data = self.load_yaml(playbook_path)
+        playbook_data["vars"] = self.configuration_variables
         return playbook_data
 
     def get_module_inventory(self, playbook: list[dict]) -> str:
@@ -146,7 +148,7 @@ class HomeLabInABox:
             playbook = self.get_module_playbook(module)
             inventory = self.get_module_inventory(playbook)
             ansible_runner = AnsibleWrapper(inventory=inventory, playbook=playbook, roles_directory=self.roles_directory)
-            logging.info("Executing the '{module}' playbook")
+            logging.info(f"Executing the '{module}' playbook")
             ansible_runner.run()
 
     def get_all_modules(self) -> list[dict]:
@@ -291,6 +293,15 @@ class HomeLabInABox:
         if not valid:
             self.save_yaml('configuration.yaml', self.configuration)
         return valid
+    
+    def gather_configuration_variables(self) -> None:
+        for module in self.configuration['Modules']:
+            for variable in module["Required Variables"]:
+                self.configuration_variables.append(
+                    {
+                        variable["Name"]: variable["Value"]
+                    }
+                )    
 
     def deploy_homelab(self) -> None:
         # Now that we have validated all the modules we can symlink their roles into our main roles folder
@@ -300,6 +311,8 @@ class HomeLabInABox:
         logging.info("Getting deployment order")
         deployment_order = self.get_deployment_order()
         print(f"Deployment order is: '{' -> '.join(deployment_order)}'")
+        logging.info(f"Gathering all variables")
+        self.gather_configuration_variables()
         self.execute_ansible_playbooks(deployment_order)
         return
 
