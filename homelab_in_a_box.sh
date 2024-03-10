@@ -49,7 +49,7 @@ install_package yamllint
 
 
 # Clone the HIAB repository 
-if git clone https://github.com/JustOneMoreDog/HomeLabInABox.git -b HIAB-Python-Design; then
+if git clone https://github.com/JustOneMoreDog/HomeLabInABox.git -b Proxmox-Module; then
   cd HomeLabInABox
 else
   echo "ERROR: Failed to clone HomeLabInABox repository."
@@ -62,3 +62,5 @@ source env/bin/activate
 
 # Install HIAB requirements
 pip install -r requirements.txt 
+
+python HomeLabInABox.py

@@ -19,6 +19,7 @@ class HomeLabInABox:
         self.desired_modules = []
         self.dependency_graph = nx.DiGraph()
         self.configuration = {}
+        self.terraform_inventory = os.path.abspath(os.path.join(os.getcwd(), "inventory", "terraform_inventory.yaml"))
         self.all_modules = self.get_all_modules()
 
     def setup_logging(self) -> None:
@@ -93,7 +94,7 @@ class HomeLabInABox:
         module_path = os.path.join('Modules', module_name)
         if not os.path.exists(module_path):
             raise ModuleConfigurationError(f"Module '{module_name}' not found in the 'Modules' directory.")
-        required_files = ['roles', 'requirements.yaml', 'playbook.yaml.j2', 'README.md'] 
+        required_files = ['roles', 'requirements.yaml', 'playbook.yaml', 'README.md'] 
         for item in required_files:
             item_path = os.path.join(module_path, item)
             if not os.path.exists(item_path):
@@ -103,6 +104,8 @@ class HomeLabInABox:
         roles_dir = os.path.join('Modules', module_name, 'roles')
         target_roles_dir = 'roles'
         for role_name in os.listdir(roles_dir):
+            if not os.path.isdir(role_name):
+                continue
             source_role = os.path.abspath(os.path.join(roles_dir, role_name))
             target_role = os.path.abspath(os.path.join(target_roles_dir, role_name))
             if os.path.exists(target_role):
@@ -123,6 +126,23 @@ class HomeLabInABox:
         self.verify_module_variables(module_variables, module['name'])
         self.add_module_dependencies_to_graph(module_dependencies, module['name'])
 
+    def get_module_playbook(self, module: str) -> dict:
+        playbook_path = os.path.join("Modules", module, "playbook.yaml")
+        playbook_data = self.load_yaml(playbook_path)
+        return playbook_data
+
+    def get_module_inventory(self, module: str, playbook: list[dict]) -> dict | str:
+        inventory = {}
+        just_local_host = True
+        for play in playbook:
+            if play['hosts'] != 'localhost':
+                just_local_host = False
+        if just_local_host:
+            return inventory
+        else:
+            filepath = 
+            return filepath
+             
     def execute_ansible_playbooks(self, modules: list[str]) -> None:
         for module in modules:
             playbook = self.get_module_playbook(module)
@@ -237,7 +257,7 @@ class HomeLabInABox:
             # TO-DO: Make this more robust. We are only adding it in if the name does not exist. But if the name exists we should verify the variables block
             config_block_exists = any(x["Name"] == configuration_block["Name"] for x in configuration_file["Modules"])
             if config_block_exists:
-                logging.info(f"Skipping '{module["name"]}' since it already exists in the configuration file")
+                logging.info(f"Skipping '{module['name']}' since it already exists in the configuration file")
             else:
                 configuration_file["Modules"].append(configuration_block)
         self.save_yaml("configuration.yaml", configuration_file)
@@ -263,13 +283,13 @@ class HomeLabInABox:
                 if not valid_name:
                     valid = False
                     invalid_name = self.configuration["Modules"][i]["Required Variables"][j]["Name"]
-                    self.configuration["Modules"][i]["Required Variables"][j]["Name"] = invalid_name + f" <--- unexpected name, expected one of these '{','.join([v["name"] for v in module_spec["variables"]])}'"
+                    self.configuration["Modules"][i]["Required Variables"][j]["Name"] = invalid_name + f" <--- unexpected name, expected one of these '{','.join([v['name'] for v in module_spec['variables']])}'"
                 expected_type = type_mappings[module_spec['required_variables'][j]["type"]]
                 valid_value = isinstance(variable["Value"], expected_type)
                 if not valid_value:
                     valid = False
                     invalid_value = self.configuration["Modules"][i]["Required Variables"][j]["Value"] 
-                    self.configuration["Modules"][i]["Required Variables"][j]["Name"] = invalid_value + f" <--- invalid type, expected a '{module_spec["type"]}')"
+                    self.configuration["Modules"][i]["Required Variables"][j]["Name"] = invalid_value + f" <--- invalid type, expected a '{module_spec['type']}')"
         if not valid:
             self.save_yaml('configuration.yaml', self.configuration)
         return valid
@@ -282,7 +302,7 @@ class HomeLabInABox:
         logging.info("Getting deployment order")
         deployment_order = self.get_deployment_order()
         print(f"Deployment order is: '{' -> '.join(deployment_order)}'")
-        # self.execute_ansible_playbooks(deployment_order)
+        self.execute_ansible_playbooks(deployment_order)
         return
 
 
@@ -360,7 +380,7 @@ def main(args: argparse.Namespace) -> int:
 #         logging.info("No valid arguments provided. Use --help for options.")
 
 if __name__ == '__main__':
-    os.chdir("/home/sandwich/CompanyInABox/HomeLabInABox")
+    # os.chdir("/home/sandwich/CompanyInABox/HomeLabInABox")
     parser = argparse.ArgumentParser(description='A script to manage a modular homelab deployment.')
     parser.add_argument('--gather-modules', 
                     action='store_true',
