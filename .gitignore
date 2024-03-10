@@ -6,3 +6,4 @@ logs/*
 !logs/.keep
 roles/*
 !roles/.keep
+__pycache__
