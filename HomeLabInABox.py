@@ -21,7 +21,7 @@ class HomeLabInABox:
         self.configuration = {}
         self.terraform_inventory = os.path.abspath(os.path.join(os.getcwd(), "inventory", "terraform_inventory.yaml"))
         self.roles_directory = os.path.abspath(os.path.join(os.getcwd(), "roles"))
-        self.configuration_variables = []
+        self.configuration_variables = {}
         self.all_modules = self.get_all_modules()
 
     def setup_logging(self) -> None:
@@ -299,11 +299,7 @@ class HomeLabInABox:
     def gather_configuration_variables(self) -> None:
         for module in self.configuration['Modules']:
             for variable in module["Required Variables"]:
-                self.configuration_variables.append(
-                    {
-                        variable["Name"]: variable["Value"]
-                    }
-                )    
+                self.configuration_variables[variable["Name"]] = variable["Value"] 
 
     def deploy_homelab(self) -> None:
         # Now that we have validated all the modules we can symlink their roles into our main roles folder
