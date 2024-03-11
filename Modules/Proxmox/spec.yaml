@@ -12,6 +12,6 @@ required_variables:
     type: str
     default: "192.168.0.5"
   - name: pve_mac_address
-    description: 'MAC address of you Proxmox hypervisor'
+    description: 'MAC address of you Proxmox hypervisor. Must use colons for the MAC address value'
     type: str
-    default: "aa-bb-cc-dd-ee-ff"
+    default: "aa:bb:cc:dd:ee:ff"

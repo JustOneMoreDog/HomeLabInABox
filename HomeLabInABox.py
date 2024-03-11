@@ -149,7 +149,7 @@ class HomeLabInABox:
         for module in modules:
             playbook = self.get_module_playbook(module)
             inventory = self.get_module_inventory(playbook)
-            ansible_runner = AnsibleWrapper(inventory=inventory, playbook=playbook, roles_directory=self.roles_directory)
+            ansible_runner = AnsibleWrapper(inventory=inventory, playbook=playbook, roles_directory=self.roles_directory, module_name=module)
             logging.info(f"Executing the '{module}' playbook")
             ansible_runner.run()
 
