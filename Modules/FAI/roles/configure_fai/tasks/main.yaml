@@ -14,6 +14,19 @@
     src: sources.list.j2
     dest: /etc/fai/apt/sources.list
 
+- name: Modify /etc/default/isc-dhcp-server
+  lineinfile:
+    path: /etc/default/isc-dhcp-server
+    regexp: '^(INTERFACESv4|INTERFACESv6)=.*'  # Find and remove existing lines
+    state: absent
+
+- name: Modify /etc/default/isc-dhcp-server
+  lineinfile:
+    path: /etc/default/isc-dhcp-server
+    regexp: "INTERFACESv4={{ bootstrapper_mgmt_interface }}"
+    state: present
+    create: yes
+
 - name: Template DHCP configuration
   template:
     src: dhcpd.conf.j2

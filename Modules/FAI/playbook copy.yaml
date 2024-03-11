@@ -1,0 +1,44 @@
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    # - name: Gather network interface facts
+    #   ansible.builtin.setup:
+    #     gather_subset: network   
+     
+    # - name: Determine the bootstrapper management interface
+    #   set_fact:
+    #     bootstrapper_mgmt_interface: "{{ item.key }}"
+    #   when: item.value.ipv4 is defined and item.value.ipv4[0].address == bootstrapper_ip
+    #   loop: "{{ ansible_facts.network | dict2items }}"
+    # - name: Install FAI server dependencies
+    #   apt:
+    #     name: "{{ packages }}"
+    #     state: present
+    #   vars:
+    #     packages:
+    #       - apache2
+    #       - fai-quickstart
+    #       - fai-doc
+    #       - fai-server
+    #       - isc-dhcp-server
+    #       - tftpd-hpa
+    #       - nfs-kernel-server
+    #       - syslinux-common
+    #       - debmirror
+    - name: Restart DHCP
+      service:
+        name: isc-dhcp-server
+        state: restarted
+    # - name: Run mkdebmirror utility
+    #   command: /usr/share/doc/fai-doc/examples/utils/mkdebmirror
+    # - name: Update /etc/hosts file
+    #   include_role:
+    #     name: configure_etc_hosts
+    #   vars:
+    #     ip_address: "{{ bootstrapper_ip }}"
+    #     hostname: "{{ bootstrapper_hostname }}"
+    #     remove: false
+    # - name: Template configuration files
+    #   include_role:
+    #     name: configure_fai

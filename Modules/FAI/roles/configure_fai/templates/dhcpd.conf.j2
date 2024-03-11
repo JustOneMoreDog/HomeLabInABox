@@ -2,7 +2,7 @@ deny unknown-clients;
 option dhcp-max-message-size 2048; 
 use-host-decl-names on;
 
-subnet {{ bootstrapper_ip | ansible.utils.ipcut(8) }} netmask 255.255.255.0 {
+subnet {{ bootstrapper_ip.split('.')[:-1] | join('.') }}.0 netmask 255.255.255.0 {
     option routers {{ bootstrapper_ip }};
     option domain-name "{{ homelab_domain_name }}";
     option domain-name-servers 1.1.1.1;
