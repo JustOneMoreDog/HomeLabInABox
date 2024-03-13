@@ -13,8 +13,8 @@ class ModuleConfigurationError(Exception):
 
 
 class HomeLabInABox:
-    def __init__(self):
-        self.setup_logging()
+    def __init__(self, debug: bool=False):
+        self.setup_logging(debug)
         self.desired_module_names = []
         self.desired_modules = []
         self.dependency_graph = nx.DiGraph()
@@ -24,9 +24,9 @@ class HomeLabInABox:
         self.configuration_variables = {}
         self.all_modules = self.get_all_modules()
 
-    def setup_logging(self) -> None:
+    def setup_logging(self, debug_mode) -> None:
         # Replace the placeholder below with your logging configuration
-        logging.basicConfig(level=logging.INFO)  # Basic for now
+        logging.basicConfig(level=logging.INFO)
 
     def load_yaml(self, yaml_path: str) -> dict:  
         try:
@@ -301,7 +301,7 @@ class HomeLabInABox:
             for variable in module["Required Variables"]:
                 self.configuration_variables[variable["Name"]] = variable["Value"] 
 
-    def deploy_homelab(self) -> None:
+    def deploy_homelab(self, debug_playbook: str='') -> None:
         # Now that we have validated all the modules we can symlink their roles into our main roles folder
         logging.info("Linking roles")
         for module in self.desired_modules:
@@ -315,8 +315,9 @@ class HomeLabInABox:
         return
 
 
-def main(args: argparse.Namespace) -> int:
-    hiab = HomeLabInABox()
+def main(hiab: HomeLabInABox) -> int:
+    if not hiab:
+        hiab = HomeLabInABox()
     # Module Choices Logic
     if os.path.exists("module_choices.yaml"):
         print("Existing module choices file found")
@@ -344,7 +345,7 @@ def main(args: argparse.Namespace) -> int:
         choice = input("Would you like to modify it? (y/n): ")
         if choice.lower() == 'y':
             hiab.build_configuration_file(refresh_available_configuration=True)
-            subprocess.call(['vim', 'module_choices.yaml'])    
+            subprocess.call(['vim', 'configuration.yaml'])    
     else:
         print("Configuration file does not exist building one now")
         hiab.build_configuration_file()
@@ -363,37 +364,43 @@ def main(args: argparse.Namespace) -> int:
     hiab.deploy_homelab()
     return 0
 
-# def main(args: argparse.Namespace) -> int:
-#     hiab = HomeLabInABox()
-#     if args.gather_modules:
-#         hiab.gather_modules()
-#         return 0
-#     elif args.validate_modules:
-#         if not hiab.validate_modules():
-#             logging.warn("Invalid module section detected throwing it back to user")
-#             return -1
-#         return 0
-#     elif args.build_configuration:
-#         hiab.build_configuration_file()
-#         return 0
-#     elif args.validate_configuration:
-#         logging.info("Validating configuration...")
-#         if not hiab.validate_configuration_file():
-#             logging.warn("Invalid configuration file detected throwing it back to user")
-#             return -1
-#         return 0
-#     elif args.deploy_homelab:
-#         logging.info("Deploying homelab...")
-#         hiab.deploy_homelab()
-#     else:
-#         logging.info("No valid arguments provided. Use --help for options.")
+def execute_arguments(args: argparse.Namespace) -> None:
+    hiab = HomeLabInABox(debug=args.debug)
+    if len(sys.argv) == 2 and args.debug:
+        rc = main(hiab)
+        sys.exit(rc)
+    if args.gather_modules:
+        hiab.gather_modules()
+    elif args.validate_modules:
+        logging.info("Validating modules...")
+        if not hiab.validate_modules():
+            logging.warn("Invalid module section detected. Please correct issues in module_choices.yaml")
+            sys.exit(-1)
+    elif args.build_configuration:
+        hiab.build_configuration_file()
+    elif args.validate_configuration:
+        logging.info("Validating configuration...")
+        if not hiab.validate_configuration_file():
+            logging.warn("Invalid configuration file detected. Please correct issues in configuration.yaml")
+            sys.exit(-1)
+    elif args.deploy_homelab:
+        logging.info("Deploying homelab...")
+        rc = main(hiab)
+        sys.exit(rc)
+    elif args.execute_module:
+        module_name = args.execute_module
+        logging.info(f"Executing specifically the '{module_name}' module")
+        hiab.deploy_homelab(debug_playbook=module_name)
+    else:
+        logging.info("No valid arguments provided. Use --help for options.")
+    sys.exit(0)
+
 
 if __name__ == '__main__':
-    # os.chdir("/home/sandwich/CompanyInABox/HomeLabInABox")
     parser = argparse.ArgumentParser(description='A script to manage a modular homelab deployment.')
     parser.add_argument('--gather-modules', 
                     action='store_true',
-                    help='Gather and display a list of available modules for the user.')
+                    help='Gathers a list of available modules.')
     parser.add_argument('--validate-modules',
                     action='store_true', 
                     help='Validates that the user has requested valid and existing modules.')
@@ -406,7 +413,16 @@ if __name__ == '__main__':
     parser.add_argument('--deploy-homelab', 
                     action='store_true',
                     help='Executes the selected modules with their configuration to deploy the homelab.')
+    parser.add_argument('--execute-module', 
+                    type=str,
+                    help='Skips execution of all other modules except this one. Useful for debugging a specific playbook.')
+    parser.add_argument('--debug', 
+                    action='store_true',
+                    help='Enables debug logging which will increase the amount of logging and print said logging to stdout.')
     args = parser.parse_args()
-    return_code = main(args)
+    if len(sys.argv) > 1:
+        execute_arguments(args)
+    else:
+        return_code = main(None, args)
     logging.info(f"Execution ending with {return_code}")
     sys.exit(return_code)
