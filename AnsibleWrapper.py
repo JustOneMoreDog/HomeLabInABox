@@ -1,21 +1,23 @@
 from ansible_runner import Runner
 import ansible_runner
-import io 
+import io
 import json
 import contextlib
-import yaml
 import re
+
 
 class AnsibleRunTimeExecution(Exception):
     pass
 
 
 class DataParsingException(Exception):
-    pass 
+    pass
 
 
 class AnsibleWrapper:
-    def __init__(self, inventory: dict, playbook: dict, roles_directory: str, module_name: str):
+    def __init__(
+        self, inventory: dict, playbook: dict, roles_directory: str, module_name: str
+    ):
         self.inventory = inventory
         self.playbook = playbook
         self.roles_directory = roles_directory
@@ -29,14 +31,14 @@ class AnsibleWrapper:
             runner = ansible_runner.run(
                 playbook=self.playbook,
                 inventory=self.inventory,
-                artifact_dir='logs/ansible-runner',
+                artifact_dir="logs/ansible-runner",
                 json_mode=True,
                 roles_path=self.roles_directory,
                 # Warnings will not be in JSON format and thus break everything
-                envvars = {
+                envvars={
                     "ANSIBLE_LOCALHOST_WARNING": False,
-                    "ANSIBLE_INVENTORY_UNPARSED_WARNING": False,    
-                }
+                    "ANSIBLE_INVENTORY_UNPARSED_WARNING": False,
+                },
             )
         json_data = self.construct_json_data(redirected_stdout, runner.rc)
         self.parse_json_data(json_data)
@@ -52,24 +54,28 @@ class AnsibleWrapper:
             raise AnsibleRunTimeExecution(error_message)
         # Only now can we finally construct the output into a single piece of data (that we currently do not use)
         constructed_json_stdout = ",".join(cleaned_stdout)
-        constructed_json_string = ''.join(["[", constructed_json_stdout, "]"])
+        constructed_json_string = "".join(["[", constructed_json_stdout, "]"])
         try:
             json_data = json.loads(constructed_json_string)
             return json_data
-        except:
-            raise DataParsingException("I have absolutely no idea how we got here and that is a problem.")
+        except json.JSONDecodeError:
+            raise DataParsingException(
+                "I have absolutely no idea how we got here and that is a problem."
+            )
 
     def locate_execution_errors(self, stdout: list) -> str:
         for entry, line in enumerate(stdout):
             json_data = json.loads(line)
-            if not "stdout" in json_data:
+            if "stdout" not in json_data:
                 continue
             if not json_data["stdout"]:
                 continue
-            is_an_error = re.search(r'.*: FAILED! .*', json_data["stdout"])
+            is_an_error = re.search(r".*: FAILED! .*", json_data["stdout"])
             if not is_an_error:
                 continue
-            task_name, task_action, task_host, task_host_ip = self.get_task_data(json_data)
+            task_name, task_action, task_host, task_host_ip = self.get_task_data(
+                json_data
+            )
             error_message = f"The '{self.module_name}' module ran the '{task_name}' task which used '{task_action}' against the '{task_host}' host located at '{task_host_ip}' and it caused the following error:\n{json_data['stdout']}"
             return error_message
 
@@ -77,20 +83,22 @@ class AnsibleWrapper:
         cleaned_stdout = []
         print("Checking for warnings")
         for entry, line in enumerate(stdout):
-            is_a_warning = re.search(r'.*\[WARNING\]: (.*) .*\[0m', line)
+            is_a_warning = re.search(r".*\[WARNING\]: (.*) .*\[0m", line)
             if is_a_warning:
                 self.parse_warning_message(is_a_warning, entry, stdout)
                 continue
             if not self.is_valid_json(line):
-                raise DataParsingException(f"The following line of output was not able to be cleaned:\n{line}")
-            cleaned_stdout.append(line)  
+                raise DataParsingException(
+                    f"The following line of output was not able to be cleaned:\n{line}"
+                )
+            cleaned_stdout.append(line)
         return cleaned_stdout
 
     def is_valid_json(self, data: str) -> bool:
         try:
             _ = json.loads(data)
             return True
-        except:
+        except json.JSONDecodeError:
             return False
 
     def parse_warning_message(self, match: re.Match, entry: int, lines: list) -> None:
@@ -98,14 +106,25 @@ class AnsibleWrapper:
         message = match.group(1)
         has_previous_entry = (entry - 1) < 0
         if not has_previous_entry:
-            print(f"We got the following warning in the '{self.module_name}' module but were unable to determine what caused it:\n'{message}'")
-            return    
+            print(
+                f"We got the following warning in the '{self.module_name}' module but were unable to determine what caused it:\n'{message}'"
+            )
+            return
         previous_entry = json.loads(lines[entry - 1])
-        task_name, task_action, task_host, task_host_ip = self.get_task_data(previous_entry)
-        print(f"The '{self.module_name}' module ran the '{task_name}' which used '{task_action}' against the '{task_host}' host located at '{task_host_ip}' and it caused the following warning:\n'{message}'")
+        task_name, task_action, task_host, task_host_ip = self.get_task_data(
+            previous_entry
+        )
+        print(
+            f"The '{self.module_name}' module ran the '{task_name}' which used '{task_action}' against the '{task_host}' host located at '{task_host_ip}' and it caused the following warning:\n'{message}'"
+        )
 
     def get_task_data(self, task: dict) -> tuple[str, str, str, str]:
-        task_name, task_action, task_host, task_host_ip = 'Unknown', 'Unknown', 'Unknown', 'Unknown'
+        task_name, task_action, task_host, task_host_ip = (
+            "Unknown",
+            "Unknown",
+            "Unknown",
+            "Unknown",
+        )
         have_event_data = "event_data" in task
         have_task_name = have_event_data and "task" in task["event_data"]
         have_task_action = have_event_data and "task_action" in task["event_data"]
@@ -134,7 +153,7 @@ class AnsibleWrapper:
             hostname = data["event_data"]["host"]
             ip_address = data["event_data"]["remote_addr"]
             task_name = data["event_data"]["task"]
-            task_action = data["event_data"]["task_action"]            
+            task_action = data["event_data"]["task_action"]
             event = {
                 "playbook": playbook,
                 "hostname": hostname,
@@ -142,7 +161,7 @@ class AnsibleWrapper:
                 "task_name": task_name,
                 "task_action": task_action,
                 "result_data": result_data,
-                "changed": changed
+                "changed": changed,
             }
             if hostname not in self.event_data:
                 self.event_data[hostname] = []
@@ -152,23 +171,14 @@ class AnsibleWrapper:
         result_data = result
         changed = result_data["changed"]
         unwanted_keys = [
-            'warnings',
-            'deprecations',
-            '_ansible_verbose_override',
-            '_ansible_no_log',
-            '_ansible_verbose_always',
-            'changed'
+            "warnings",
+            "deprecations",
+            "_ansible_verbose_override",
+            "_ansible_no_log",
+            "_ansible_verbose_always",
+            "changed",
         ]
         for key in unwanted_keys:
             if key in result_data:
                 del result_data[key]
         return result_data, changed
-
-
-# if __name__ == '__main__':
-#     with open('tester.yaml', 'r') as f:
-#         playbook = yaml.safe_load(f)
-#     with open('inventory/tester.yaml', 'r') as f:
-#         inventory = yaml.safe_load(f)
-#     ansible_job = AnsibleWrapper(playbook=playbook, inventory=inventory)
-#     ansible_job.run()
