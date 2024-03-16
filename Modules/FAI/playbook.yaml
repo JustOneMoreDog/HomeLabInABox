@@ -2,7 +2,7 @@
   connection: local
   tasks:
     - name: Gather network interface facts
-      ansible.builtin.setup:
+      setup:
         gather_subset: network
     
     - name: Determine the bootstrapper management interface
