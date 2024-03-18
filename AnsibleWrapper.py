@@ -2,7 +2,6 @@ from ansible_runner import Runner
 import ansible_runner
 import logging
 from rich.console import Console
-import json
 
 
 class AnsibleRunTimeExecution(Exception):
@@ -62,9 +61,6 @@ class AnsibleWrapper:
             # TO-DO: Implement more functions to handle more event types
             return
         task_name, task_action, task_host, task_host_ip = self.get_task_data(event)
-        if task_name == "Unknown":
-            print("WACKY")
-            print(json.dumps(event, indent=4))
         self.parse_event_data(event)
         self.console.log(f"[{task_name}][{task_action}][{task_host}][{task_host_ip}]: Complete")
         
@@ -141,7 +137,13 @@ class AnsibleWrapper:
             self.all_event_data[hostname] = []
         self.all_event_data[hostname].append(event)
     
-    def clean_result_data(self, result: dict) -> tuple[dict, bool]: 
+    def clean_result_data(self, result: dict) -> tuple[dict, bool]:
+        """Cleans the result data by pulling out all the unwanted data
+        
+        Args: result (dict): The result data from the Ansible Runner
+
+        Returns: tuple[dict, bool]: The cleaned result data and a boolean indicating if the result data has changed
+        """
         result_data = result
         changed = result_data["changed"]
         unwanted_keys = [

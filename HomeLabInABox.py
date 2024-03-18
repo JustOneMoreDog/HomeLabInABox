@@ -464,7 +464,7 @@ class HomeLabInABox:
         self.execute_ansible_playbooks(deployment_order)
 
 
-def main(hiab: HomeLabInABox) -> int:
+def main(hiab: HomeLabInABox = None) -> int:
     """This is what is defaulted to when the project is run. It will guide the user through the process of deploying the homelab.
 
     Args: hiab (HomeLabInABox): An instance of the HomeLabInABox class.
@@ -477,7 +477,7 @@ def main(hiab: HomeLabInABox) -> int:
     # Module Choices Logic
     if os.path.exists("module_choices.yaml"):
         logging.info("Existing module choices found")
-        choice = input("Would you like to modify it? (y/n): ")
+        choice = input("Existing module choices found. Would you like to modify it? (y/n): ")
         if choice.lower() == "y":
             hiab.gather_modules(refresh_available_modules=True)
             subprocess.call(["vim", "module_choices.yaml"])
@@ -495,7 +495,7 @@ def main(hiab: HomeLabInABox) -> int:
     # Configuration Logic
     if os.path.exists("configuration.yaml"):
         logging.info("Existing configuration file found")
-        choice = input("Would you like to modify it? (y/n): ")
+        choice = input("Existing configuration file found. Would you like to modify it? (y/n): ")
         if choice.lower() == "y":
             hiab.build_configuration_file(refresh_available_configuration=True)
             subprocess.call(["vim", "configuration.yaml"])
@@ -600,6 +600,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         execute_arguments(args)
     else:
-        return_code = main(None, args)
-    logging.info(f"Execution ending with {return_code}")
-    sys.exit(return_code)
+        return_code = main()
+        if return_code == 0:
+            print("Homelab in a box deployment complete!")
+        logging.info(f"Execution ending with {return_code}")
+        sys.exit(return_code)
