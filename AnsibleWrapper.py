@@ -17,10 +17,11 @@ class AnsibleWrapper:
     def __init__(self, inventory: dict, playbook: dict, roles_directory: str, module_name: str):
         logging.getLogger('HomeLabInABox')
         logging.info("Creating an AnsibleWrapper object")
+        self.valid_event_types = ["runner_on_ok", "runner_on_failed", "runner_on_unreachable", "playbook_on_stats"]
         self.inventory = inventory
         self.playbook = playbook
         self.roles_directory = roles_directory
-        self.all_event_data = list[dict]
+        self.all_event_data = {}
         self.module_name = module_name
         self.console = Console()
 
@@ -34,7 +35,8 @@ class AnsibleWrapper:
                 artifact_dir="logs/ansible-runner",
                 json_mode=True,
                 roles_path=self.roles_directory,
-                event_handler=self.handle_event
+                event_handler=self.runner_event_callback,
+                quiet=True
             )
         if runner.rc != 0:
             logging.warning(f"The '{self.module_name}' module failed to run successfully")
@@ -44,19 +46,22 @@ class AnsibleWrapper:
             raise AnsibleRunTimeExecution(error_message)
             
     def locate_execution_errors(self) -> str:
-        for host in self.all_event_data:
-            error_message = self.check_host_for_execution_errors(host)
+        for host, events in self.all_event_data.items():
+            error_message = self.check_host_for_execution_errors(host, events)
             if error_message:
                 return error_message
         return ""
         
-    def check_host_for_execution_errors(self, events: list[dict]) -> str:
+    def check_host_for_execution_errors(self, host: str, events: list[dict]) -> str:
         """Checks all the event data for a given host for any errors that occurred during the playbook run
         
-        Args: events (list[dict]): The event data from the host in question
+        Args: 
+            events (list[dict]): The event data from the host in question
+            host (str): The host that the event data is from
         
         Returns: str: The error message if one is found, otherwise an empty string
         """
+        logging.info(f"Checking for errors in the event data for '{host}'")
         for event in events:
             if "stdout" not in event:
                 continue
@@ -77,7 +82,19 @@ class AnsibleWrapper:
 
         Returns: None
         """
+        if event['event'] == 'playbook_on_task_start':
+            self.console.log(f"Running '{event['event_data']['name']}' against '{event['event_data']['play_pattern']}'")
+            return
+        if event['event'] == 'playbook_on_stats':
+            # TO-DO: Implement a play recap parsing method to display the results of the playbook run
+            self.console.log("Playbook run complete")
+            return        
+        if event['event'] not in self.valid_event_types:
+            return
         task_name, task_action, task_host, task_host_ip = self.get_task_data(event)
+        if task_name == "Unknown":
+            print("WACKY")
+            print(event)
         self.parse_event_data(event)
         self.console.log(f"[{task_name}][{task_action}][{task_host}][{task_host_ip}]: Complete")
 
@@ -140,3 +157,20 @@ class AnsibleWrapper:
         if hostname not in self.all_event_data:
             self.all_event_data[hostname] = []
         self.all_event_data[hostname].append(event)
+    
+    def clean_result_data(self, result: dict) -> tuple[dict, bool]: 
+        print(f"Here is the data:\n{result}")
+        result_data = result
+        changed = result_data["changed"]
+        unwanted_keys = [
+            "warnings",
+            "deprecations",
+            "_ansible_verbose_override",
+            "_ansible_no_log",
+            "_ansible_verbose_always",
+            "changed",
+        ]
+        for key in unwanted_keys:
+            if key in result_data:
+                del result_data[key]
+        return result_data, changed
