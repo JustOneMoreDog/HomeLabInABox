@@ -1,8 +1,8 @@
 from ansible_runner import Runner
 import ansible_runner
-import re
 import logging
 from rich.console import Console
+import json
 
 
 class AnsibleRunTimeExecution(Exception):
@@ -28,7 +28,7 @@ class AnsibleWrapper:
     def run(self) -> None:
         """Runs the Ansible playbook for a given module"""
         runner = Runner
-        with self.console.status(f"Running {self.module_name} playbook...") as status:
+        with self.console.status(f"Running {self.module_name} playbook...") as _:
             runner = ansible_runner.run(
                 playbook=self.playbook,
                 inventory=self.inventory,
@@ -39,42 +39,8 @@ class AnsibleWrapper:
                 quiet=True
             )
         if runner.rc != 0:
-            logging.warning(f"The '{self.module_name}' module failed to run successfully")
-            error_message = self.locate_execution_errors()
-            if not error_message:
-                error_message = "We were unable to locate an error message for the failed playbook run"
-            raise AnsibleRunTimeExecution(error_message)
-            
-    def locate_execution_errors(self) -> str:
-        for host, events in self.all_event_data.items():
-            error_message = self.check_host_for_execution_errors(host, events)
-            if error_message:
-                return error_message
-        return ""
+            raise AnsibleRunTimeExecution("Ansible runner returned a non-zero exit code which means that an exception occurred during the playbook run that we did not catch with our event handler. This is very bad.")
         
-    def check_host_for_execution_errors(self, host: str, events: list[dict]) -> str:
-        """Checks all the event data for a given host for any errors that occurred during the playbook run
-        
-        Args: 
-            events (list[dict]): The event data from the host in question
-            host (str): The host that the event data is from
-        
-        Returns: str: The error message if one is found, otherwise an empty string
-        """
-        logging.info(f"Checking for errors in the event data for '{host}'")
-        for event in events:
-            if "stdout" not in event:
-                continue
-            if not event["stdout"]:
-                continue
-            is_an_error = re.search(r".*: FAILED! .*", event["stdout"])
-            if not is_an_error:
-                continue
-            task_name, task_action, task_host, task_host_ip = self.get_task_data(event)
-            error_message = f"The '{self.module_name}' module ran the '{task_name}' task which used '{task_action}' against the '{task_host}' host located at '{task_host_ip}' and it caused the following error:\n{event['stdout']}"
-            return error_message
-        return ""
-    
     def runner_event_callback(self, event: dict) -> None:
         """Processes events from Ansible Runner
         
@@ -88,15 +54,32 @@ class AnsibleWrapper:
         if event['event'] == 'playbook_on_stats':
             # TO-DO: Implement a play recap parsing method to display the results of the playbook run
             self.console.log("Playbook run complete")
-            return        
+            return
+        if event['event'] == 'runner_on_failed':
+            error_message = self.get_execution_error_message(event)
+            raise AnsibleRunTimeExecution(error_message)      
         if event['event'] not in self.valid_event_types:
+            # TO-DO: Implement more functions to handle more event types
             return
         task_name, task_action, task_host, task_host_ip = self.get_task_data(event)
         if task_name == "Unknown":
             print("WACKY")
-            print(event)
+            print(json.dumps(event, indent=4))
         self.parse_event_data(event)
         self.console.log(f"[{task_name}][{task_action}][{task_host}][{task_host_ip}]: Complete")
+        
+    def get_execution_error_message(self, event: dict) -> str:
+        """When we get a runner_on_failed event we use this function to extract relevant information from the event data.
+        
+        Args: 
+            events dict: The event data that contains an error message
+        
+        Returns: str: A structured error message that we can now raise to the user
+        """
+        logging.info("Checking for errors in the event data")
+        task_name, task_action, task_host, task_host_ip = self.get_task_data(event)
+        error_message = f"The '{self.module_name}' module ran the '{task_name}' task which used '{task_action}' against the '{task_host}' host located at '{task_host_ip}' and it caused the following error:\n{event['stdout']}"
+        return error_message
 
     def get_task_data(self, task: dict) -> tuple[str, str, str, str]:
         """Extracts the task data from the event data
@@ -159,7 +142,6 @@ class AnsibleWrapper:
         self.all_event_data[hostname].append(event)
     
     def clean_result_data(self, result: dict) -> tuple[dict, bool]: 
-        print(f"Here is the data:\n{result}")
         result_data = result
         changed = result_data["changed"]
         unwanted_keys = [

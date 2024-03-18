@@ -10,3 +10,11 @@ required_variables:
     description: 'IP address for your bootstrapper'
     type: str
     default: "192.168.0.10"
+  - name: bootstrapper_subnet
+    description: 'Subnet mask for the bootstrapper management network. Ex. 255.255.255.0'
+    type: str
+    default: "255.255.255.0"
+  - name: bootstrapper_mgmt_interface
+    description: 'The name of the network interface that the IP is assigned to. Ex. eth0'
+    type: str
+    default: "enX0"
