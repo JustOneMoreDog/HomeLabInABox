@@ -3,3 +3,7 @@
   apt: 
     upgrade: yes
     update_cache: yes
+
+- name: Set the hostname of the bootstrapper
+  hostname:
+    name: "{{ bootstrapper_hostname }}"

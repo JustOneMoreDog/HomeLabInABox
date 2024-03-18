@@ -522,6 +522,7 @@ def execute_arguments(args: argparse.Namespace) -> None:
 
     Returns: None
     """
+    # TO-DO: Print statements for the validate calls so that the user knows they are good 
     hiab = HomeLabInABox(debug=args.debug)
     if len(sys.argv) == 2 and args.debug:
         rc = main(hiab)
