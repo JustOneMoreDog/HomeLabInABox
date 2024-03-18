@@ -7,3 +7,6 @@ logs/*
 roles/*
 !roles/.keep
 __pycache__
+HomeLabInABox.code-workspace
+.flake8
+tester.py

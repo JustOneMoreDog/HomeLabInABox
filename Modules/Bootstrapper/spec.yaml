@@ -7,6 +7,10 @@ required_variables:
     type: str
     default: "bootstrappa"
   - name: bootstrapper_ip
-    description: 'IP address for your bootstrapper'
+    description: 'IP address for your bootstrapper. Make sure to include the CIDR notation.'
     type: str
-    default: "192.168.0.10"
+    default: "192.168.0.10/24"
+  - name: bootstrapper_mgmt_interface
+    description: 'The name of the network interface that the IP is assigned to. Ex. enX0'
+    type: str
+    default: "enX0"

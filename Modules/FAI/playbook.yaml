@@ -1,16 +1,6 @@
 - hosts: localhost
   connection: local
   tasks:
-    - name: Gather network interface facts
-      ansible.builtin.setup:
-        gather_subset: network
-    
-    - name: Determine the bootstrapper management interface
-      set_fact:
-        bootstrapper_mgmt_interface: "{{ item.key }}"
-      when: item.value.ipv4 is defined and item.value.ipv4[0].address == bootstrapper_ip
-      loop: "{{ ansible_facts.network | dict2items }}"
-
     - name: Install FAI server dependencies
       apt:
         name: "{{ packages }}"
