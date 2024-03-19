@@ -39,3 +39,8 @@
     - name: Template configuration files
       include_role:
         name: configure_fai
+
+    - name: Run FAI Setup
+      command: fai-setup -v
+
+    # - name: Configure NFS Exports
