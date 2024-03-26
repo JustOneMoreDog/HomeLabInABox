@@ -17,3 +17,11 @@
         ip_address: "{{ pve_ip_address }}"
         mac_address: "{{ pve_mac_address }}"
         remove: false
+
+    - name: Initialize Bootloader config for hypervisor
+      command: "fai-chboot -v -I -B -u nfs://{{ bootstrapper_ip | ansible.utils.ipaddr('address') }}/srv/fai/config {{ pve_hostname }}"
+
+    - name: Send wake on LAN packet to hypervisor
+      wakeonlan:
+        mac: "{{ pve_mac_address }}"
+        broadcast: "{{ bootstrapper_ip | ansible.utils.ipaddr('broadcast') }}"

@@ -46,10 +46,12 @@ install_package python3.11-venv
 install_package vim
 install_package git
 install_package yamllint
+install_package wakeonlan
+install_package perl-tk 
 
 
 # Clone the HIAB repository 
-if git clone https://github.com/JustOneMoreDog/HomeLabInABox.git -b Proxmox-Module; then
+if git clone https://github.com/JustOneMoreDog/HomeLabInABox.git; then
   cd HomeLabInABox
 else
   echo "ERROR: Failed to clone HomeLabInABox repository."

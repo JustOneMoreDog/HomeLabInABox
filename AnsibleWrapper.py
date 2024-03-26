@@ -2,6 +2,7 @@ from ansible_runner import Runner
 import ansible_runner
 import logging
 from rich.console import Console
+import json
 
 
 class AnsibleRunTimeExecution(Exception):
@@ -72,9 +73,10 @@ class AnsibleWrapper:
         
         Returns: str: A structured error message that we can now raise to the user
         """
+        # TO-DO: Pulling the JSON out of the error message and pretty printing it. Sometimes that JSON can have "stdout" and if we see that it is in there we should pull it out and pretty print it so that there are not just a bunch of \n-es all over the place.
         logging.info("Checking for errors in the event data")
         task_name, task_action, task_host, task_host_ip = self.get_task_data(event)
-        error_message = f"The '{self.module_name}' module ran the '{task_name}' task which used '{task_action}' against the '{task_host}' host located at '{task_host_ip}' and it caused the following error:\n{event['stdout']}"
+        error_message = f"The '{self.module_name}' module ran the '{task_name}' task which used '{task_action}' against the '{task_host}' host located at '{task_host_ip}' and it caused the following error:\n{json.dumps(event['event_data'], indent=4)}"
         return error_message
 
     def get_task_data(self, task: dict) -> tuple[str, str, str, str]:

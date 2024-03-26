@@ -1,4 +1,9 @@
 - hosts: localhost
   connection: local
+  vars:
+    bootstrapper_wan_interface: "wlp0s20f3"
+    bootstrapper_mgmt_interface: "eno1"
+    bootstrapper_ip: "10.10.10.10/24"
+    bootstrapper_hostname: "bootstrappa"
   roles:
     - configure_bootstrapper

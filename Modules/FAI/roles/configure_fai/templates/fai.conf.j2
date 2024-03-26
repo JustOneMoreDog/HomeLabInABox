@@ -1,4 +1,4 @@
-SERVER={{ bootstrapper_ip }}
+SERVER={{ bootstrapper_ip | ansible.utils.ipaddr('address') }}
 FAI_CONFIG_SRC=nfs://$SERVER/srv/fai/config
 LOGUSER=fai
 FAI_LOGPROTO=ssh

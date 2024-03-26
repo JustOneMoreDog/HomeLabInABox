@@ -14,3 +14,7 @@ required_variables:
     description: 'The name of the network interface that the IP is assigned to. Ex. enX0'
     type: str
     default: "enX0"
+  - name: bootstrapper_wan_interface
+    description: 'The name of the network interface that is connected to the internet. Ex. wlp0s20f3'
+    type: str
+    default: "wlp0s20f3"

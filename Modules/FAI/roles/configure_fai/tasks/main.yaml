@@ -14,13 +14,13 @@
     src: sources.list.j2
     dest: /etc/fai/apt/sources.list
 
-- name: Modify /etc/default/isc-dhcp-server
+- name: Remove Default Lines In /etc/default/isc-dhcp-server
   lineinfile:
     path: /etc/default/isc-dhcp-server
-    regexp: '^(INTERFACESv4|INTERFACESv6)=.*'  # Find and remove existing lines
+    regexp: '^(INTERFACESv4|INTERFACESv6)=.*'
     state: absent
 
-- name: Modify /etc/default/isc-dhcp-server
+- name: Properly Configure /etc/default/isc-dhcp-server
   lineinfile:
     path: /etc/default/isc-dhcp-server
     regexp: "INTERFACESv4={{ bootstrapper_mgmt_interface }}"

@@ -1,14 +1,21 @@
-deny unknown-clients;
 option dhcp-max-message-size 2048; 
 use-host-decl-names on;
 
 subnet {{ bootstrapper_ip | ansible.utils.ipaddr('network') }} netmask {{ bootstrapper_ip | ansible.utils.ipaddr('netmask') }} {
-    option routers {{ bootstrapper_ip | ansible.utils.ipaddr('address') }};
-    option domain-name "{{ homelab_domain_name }}";
-    option domain-name-servers 1.1.1.1;
-    option time-servers {{ bootstrapper_ip | ansible.utils.ipaddr('address') }};
-    option ntp-servers {{ bootstrapper_ip | ansible.utils.ipaddr('address') }};
-    server-name {{ bootstrapper_hostname }};
-    next-server {{ bootstrapper_hostname }};
-    filename "pxelinux.0";
+      range 10.10.10.100 10.10.10.240;
+      default-lease-time 86400;
+      max-lease-time 604800;
+      option routers {{ bootstrapper_ip | ansible.utils.ipaddr('address') }};
+      option domain-name "{{ homelab_domain_name }}";
+      option domain-name-servers 1.1.1.1;
+      option time-servers {{ bootstrapper_ip | ansible.utils.ipaddr('address') }};
+      option ntp-servers {{ bootstrapper_ip | ansible.utils.ipaddr('address') }};
+      server-name {{ bootstrapper_hostname }};
+      next-server {{ bootstrapper_ip | ansible.utils.ipaddr('address') }};
+      if substring(option vendor-class-identifier, 0, 20) = "PXEClient:Arch:00000" {
+            filename "fai/pxelinux.0";
+      }
+      if substring(option vendor-class-identifier, 0, 20) = "PXEClient:Arch:00007" {
+            filename "fai/syslinux.efi";
+      }
 }

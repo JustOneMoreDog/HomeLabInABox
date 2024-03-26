@@ -8,6 +8,14 @@ import subprocess
 from AnsibleWrapper import AnsibleWrapper
 import time
 from rich import print
+import random
+import string
+import crypt
+import base64
+import stat
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
 
 
 class ModuleConfigurationError(Exception):
@@ -59,6 +67,79 @@ class HomeLabInABox:
         logging.info("Logging setup complete")
         logging.warning("Logging setup complete")
         logging.debug("Logging setup complete")
+
+    def generate_and_hash_password(self) -> str:
+        """Generates a strong random password and returns its SHA512 hash.
+
+        Returns: tuple: The generated password and its SHA512 hash.
+        """
+        characters = string.ascii_letters + string.digits
+        salt = base64.urlsafe_b64encode(os.urandom(8)).decode()
+        password = ''.join(random.choice(characters) for _ in range(12))
+        self.plaintext_secret_to_file("root_password", password, "The root password for the hypervisor")
+        password_hash = crypt.crypt(password, f"$6${salt}$")
+        return password_hash
+    
+    def plaintext_secret_to_file(self, name: str, secret: any, description: str) -> None:
+        """Writes a secret to our not so secure secrets.yaml file in the files directory.
+        
+        Args: 
+            name (str): The name of the secret. 
+            secret (any): The not so secret value. 
+            description (str): A description of the secret.
+        
+        Returns: None
+        """
+        secrets_file_path = os.path.abspath(os.path.join("files", "secrets.yaml"))
+        if os.path.exists(secrets_file_path):
+            secrets_data = self.load_yaml(secrets_file_path)
+        else:
+            secrets_data = {"Secrets": []}
+        secret_data = {
+            "name": name,
+            "secret": secret,
+            "description": description
+        }
+        secrets_data['Secrets'].append(secret_data)
+        self.save_yaml(secrets_file_path, secrets_data)
+        logging.info(f"Secret '{name}' written to '{secrets_file_path}'")
+
+    def generate_ansible_ssh_keypair(self) -> None:
+        """Generates an SSH keypair for Ansible to use and saves it in the files directory.
+        
+        Returns: str: The public key string.
+        """
+        private_key_path = os.path.abspath(os.path.join("files", "ansible_id_rsa"))
+        public_key_path = os.path.abspath(os.path.join("files", "ansible_id_rsa.pub"))
+        if os.path.exists(private_key_path) and os.path.exists(public_key_path):
+            logging.info("Ansible SSH keypair already exists")
+            return
+        logging.info("Generating Ansible SSH keypair")
+        key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=4096,
+            backend=default_backend()
+        )
+        private_key = key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        public_key = key.public_key().public_bytes(
+            encoding=serialization.Encoding.OpenSSH,
+            format=serialization.PublicFormat.OpenSSH
+        )
+        logging.info("Saving Ansible SSH keypair to files directory")
+        with open(private_key_path, "wb") as f:
+            f.write(private_key)
+            # Equivalent to 600
+            os.chmod(f.name, stat.S_IRUSR | stat.S_IWUSR)
+        with open(public_key_path, "wb") as f:
+            f.write(public_key)
+            # Equivalent to 644
+            os.chmod(f.name, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+        public_key_string = public_key.decode('utf-8')
+        return public_key_string
 
     def get_all_modules(self) -> list[dict]:
         """Gets all the modules from the Modules directory.
@@ -182,11 +263,13 @@ class HomeLabInABox:
 
         Returns: None
         """
-        logging.info("Linking module roles together")
+        logging.info(f"Linking '{module_name}' roles together")
         roles_dir = os.path.join("Modules", module_name, "roles")
         target_roles_dir = "roles"
         for role_name in os.listdir(roles_dir):
-            if not os.path.isdir(role_name):
+            role_dir_abs_path = os.path.abspath(os.path.join(roles_dir, role_name))
+            if not os.path.isdir(role_dir_abs_path):
+                logging.info(f"Skipping '{role_name}' since it is not a directory")
                 continue
             source_role = os.path.abspath(os.path.join(roles_dir, role_name))
             target_role = os.path.abspath(os.path.join(target_roles_dir, role_name))
@@ -351,7 +434,8 @@ class HomeLabInABox:
         """
         logging.info("Loading desired modules")
         # Loading our configuration file
-        self.configuration = self.load_yaml("configuration.yaml")
+        if os.path.exists("configuration.yaml"):
+            self.configuration = self.load_yaml("configuration.yaml")
         # Build our initial list of desired_module_names
         _ = self.get_desired_modules()
         # Use that list to get all their dependencies, add them to a graph, and then get the module's spec
@@ -394,7 +478,8 @@ class HomeLabInABox:
                 logging.info(f"Skipping '{module['name']}' since it already exists in the configuration file")
                 continue
             configuration_file["Modules"].append(configuration_block)
-        self.save_yaml("configuration.yaml", configuration_file)        
+        self.save_yaml("configuration.yaml", configuration_file)
+        self.configuration = configuration_file        
 
     def validate_configuration_file(self) -> bool:
         """Validates that the user has provided correct configuration values for the selected modules.
@@ -443,10 +528,16 @@ class HomeLabInABox:
         
         Returns: None
         """
-        logging.info("Gathering all variables")
+        logging.info("Gathering all variables from configuration file")
         for module in self.configuration["Modules"]:
             for variable in module["Required Variables"]:
                 self.configuration_variables[variable["Name"]] = variable["Value"]
+        logging.info("Generating random password for root user on hypervisor")
+        root_password_hash = self.generate_and_hash_password() 
+        self.configuration_variables["root_password_hash"] = root_password_hash
+        logging.info("Generating Ansible SSH keypair")
+        ansible_public_key = self.generate_ansible_ssh_keypair()
+        self.configuration_variables["ansible_public_key"] = ansible_public_key
 
     def deploy_homelab(self, debug_playbook: str = "") -> None:
         """Main execution logic for the project.

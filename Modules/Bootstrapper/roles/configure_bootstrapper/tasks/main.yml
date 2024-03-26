@@ -1,9 +1,37 @@
 - name: Update system packages
   become: true
-  apt: 
+  apt:
     upgrade: yes
     update_cache: yes
+
+- name: Make iptables rules persistent
+  apt:
+    name: iptables-persistent
+    state: present
 
 - name: Set the hostname of the bootstrapper
   hostname:
     name: "{{ bootstrapper_hostname }}"
+
+- name: Enabling IP forwarding
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: 1
+    state: present
+    reload: yes
+
+- name: Setting Up Bootstrapper To Be A Basic Router 
+  shell: "iptables -t nat -A POSTROUTING -o {{ bootstrapper_wan_interface }} -j MASQUERADE"
+  loop:
+    - "iptables -t nat -A POSTROUTING -o {{ bootstrapper_wan_interface }} -j MASQUERADE"
+    - "iptables -A FORWARD -i {{ bootstrapper_mgmt_interface }} -o {{ bootstrapper_wan_interface }} -j ACCEPT"
+    - "iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT"
+
+- name: Save current iptables rules
+  shell: "netfilter-persistent save"
+
+- name: Save current iptables rules
+  service:
+    name: netfilter-persistent
+    state: restarted
+    enabled: true

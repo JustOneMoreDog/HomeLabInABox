@@ -7,7 +7,7 @@
         state: present
       vars:
         packages:
-          - apache2
+          # - apache2
           - fai-quickstart
           - fai-doc
           - fai-server
@@ -15,24 +15,13 @@
           - tftpd-hpa
           - nfs-kernel-server
           - syslinux-common
-          - debmirror
-
-    - name: Create symlink for Debian mirror
-      file:
-        src: /files/scratch/debmirror
-        dest: /var/www/debmirror
-        state: link
-        force: true
-        follow: false
-
-    # - name: Run mkdebmirror utility
-    #   command: /usr/share/doc/fai-doc/examples/utils/mkdebmirror
+          # - debmirror
 
     - name: Update /etc/hosts file
       include_role:
         name: configure_etc_hosts
       vars:
-        ip_address: "{{ bootstrapper_ip }}"
+        ip_address: "{{ bootstrapper_ip | ansible.utils.ipaddr('address') }}"
         hostname: "{{ bootstrapper_hostname }}"
         remove: false
 
@@ -40,7 +29,177 @@
       include_role:
         name: configure_fai
 
-    - name: Run FAI Setup
-      command: fai-setup -v
+    - name: Run FAI Setup (This takes a while...)
+      command: fai-setup -v -f
 
-    # - name: Configure NFS Exports
+    - name: Create pxeusers group
+      group:
+        name: pxeusers
+        state: present
+
+    - name: Add fai and root to pxeusers group
+      user:
+        name: "{{ item }}"
+        groups: pxeusers
+        append: true
+      loop:
+        - fai
+        - root
+
+    - name: Modify existing lines in /etc/exports
+      lineinfile:
+        path: /etc/exports
+        regexp: '^({{ item }}).*{{ bootstrapper_ip | ansible.utils.ipaddr("address/prefix") }}(.*)$'
+        line: '\1 {{ bootstrapper_ip | ansible.utils.ipaddr("network/prefix") }}\2'
+        state: present
+        backrefs: true
+        create: true
+        mode: 0644
+      loop:
+        - '/srv/fai/config'
+        - '/srv/fai/nfsroot'
+
+    - name: Restart NFS
+      service:
+        name: nfs-kernel-server
+        state: restarted
+
+    - name: Create Directory For TFTP
+      file:
+        path: /srv/tftp/fai/pxelinux.cfg
+        state: directory
+        mode: 0644
+
+    - name: Get kernel and initrd files in TFTP directory
+      find:
+        paths: /srv/tftp/fai/
+        patterns: ["vmlinuz-*", "initrd.img-*"]
+        file_type: file
+      register: old_boot_files
+
+    - name: Remove old kernel and initrd files in TFTP directory
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_boot_files.files }}"
+      when: item.path is regex('^/srv/tftp/fai/(vmlinuz|initrd\.img)-(\d+\.\d+\.\d+)-')
+
+    - name: Get latest kernel and initrd versions in boot directory
+      find:
+        paths: /boot
+        patterns: ["vmlinuz-*", "initrd.img-*"]
+        file_type: file
+      register: boot_files
+
+    - name: Copy latest kernel and initrd to TFTP directory
+      copy:
+        src: "{{ item.path }}"
+        dest: /srv/tftp/fai/
+        mode: preserve
+        owner: fai
+        group: pxeusers
+      loop: "{{ boot_files.files }}"
+      when: item.path is regex('^/boot/(vmlinuz|initrd\.img)-(\d+\.\d+\.\d+)-')
+
+    - name: Confirm PXE Configuration File Exists
+      file:
+        path: "/srv/tftp/fai/pxelinux.0"
+        state: file
+      failed_when: false
+
+    - name: Copy FAI Configuration Files
+      copy:
+        src: /usr/share/doc/fai-doc/examples/simple/
+        dest: /srv/fai/config/
+        mode: preserve
+
+    - name: Give FAI Ownership of TFTP directory
+      file:
+        path: /srv/tftp
+        owner: fai
+        group: pxeusers
+        recurse: true
+
+    - name: Restart TFTP
+      service:
+        name: tftpd-hpa
+        state: restarted
+
+    - name: Give FAI Ownership of /srv/fai/config
+      file:
+        path: /srv/fai/config
+        owner: fai
+        group: pxeusers
+        recurse: true
+
+    - name: Create default disk partition layout
+      blockinfile:
+        path: /srv/fai/config/disk_config/DEFAULT
+        block: |
+          disk_config disk1 disklabel:gpt fstabkey:uuid align-at:1M
+
+          p=efi    /boot/efi 512M vfat rw
+          p=boot   /boot    200  ext4 rw,noatime
+          p=system -        4G-  -    -
+
+          disk_config lvm
+
+          vg vg1 disk1.3
+          vg1-root    /      3G-     ext4   noatime,rw
+          vg1-swap    swap   200-4G  swap   sw
+        owner: fai
+        group: pxeusers
+        mode: 0644
+        create: true
+
+    - name: Update FAI package configuration for Proxmox
+      lineinfile:
+        path: /srv/fai/config/package_config/DEBIAN
+        line: "{{ item }}"
+        insertbefore: "^PACKAGES install-norec ARM64"
+      loop:
+        # - pve-firmware
+        # - pve-kernel
+        # - pve-headers
+        # - proxmox-ve
+        - wakeonlan
+        - ''
+
+    - name: Create post install script
+      blockinfile:
+        path: /srv/fai/config/scripts/DEBIAN/50-post
+        block: |
+          #!/bin/bash
+          hostnamectl set-hostname {{ pve_hostname }}
+          apt update -y && apt full-upgrade -y
+          touch /this_is_a_test_file
+          useradd -m -s /bin/bash ansible
+          passwd -d ansible
+          usermod -aG sudo ansible
+          mkdir -p /home/ansible/.ssh
+          echo "{{ ansible_public_key }}" >> /home/ansible/.ssh/authorized_keys
+          chmod 644 /home/ansible/.ssh/authorized_keys
+          chown -R ansible:ansible /home/ansible/
+        owner: fai
+        group: pxeusers
+        mode: 0777
+        create: true
+
+    - name: Copy fai.conf inside nfsroot
+      copy:
+        src: /etc/fai/fai.conf
+        dest: /srv/fai/nfsroot/etc/fai/fai.conf
+        owner: fai
+        group: pxeusers
+        mode: preserve
+
+    - name: Modify FAI ssh_config
+      blockinfile:
+        path: /srv/fai/nfsroot/etc/ssh/ssh_config
+        block: |
+          Host {{ bootstrapper_ip | ansible.utils.ipaddr('address') }}
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+        state: present
+        create: true
+        mode: 0644

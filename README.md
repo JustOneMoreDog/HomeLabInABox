@@ -7,7 +7,7 @@ Automated deployment and configuration of a modular home lab
 After completing the bootstrapping checklist below, run the following command to get your home lab deployed.
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/JustOneMoreDog/HomeLabInABox/homelab_in_a_box.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/JustOneMoreDog/HomeLabInABox/main/homelab_in_a_box.sh)
 ```
 
 ## Bootstrapping
