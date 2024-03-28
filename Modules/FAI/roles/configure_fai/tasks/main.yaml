@@ -7,7 +7,6 @@
   template:
     src: nfsroot.conf.j2
     dest: /etc/fai/nfsroot.conf
-  notify: Restart NFS
 
 - name: Template Apt Sources configuration
   template:
@@ -32,10 +31,12 @@
   template:
     src: dhcpd.conf.j2
     dest: /etc/dhcp/dhcpd.conf
-  notify: Restart DHCP
 
 - name: Template TFTP configuration
   template:
     src: tftpd-hpa.j2
     dest: /etc/default/tftpd-hpa
-  notify: Restart TFTP
+
+- name: Restart PXE Services
+  include_role:
+    name: restart_pxe_services

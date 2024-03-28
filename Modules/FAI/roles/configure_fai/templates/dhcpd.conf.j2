@@ -8,8 +8,6 @@ subnet {{ bootstrapper_ip | ansible.utils.ipaddr('network') }} netmask {{ bootst
       option routers {{ bootstrapper_ip | ansible.utils.ipaddr('address') }};
       option domain-name "{{ homelab_domain_name }}";
       option domain-name-servers 1.1.1.1;
-      option time-servers {{ bootstrapper_ip | ansible.utils.ipaddr('address') }};
-      option ntp-servers {{ bootstrapper_ip | ansible.utils.ipaddr('address') }};
       server-name {{ bootstrapper_hostname }};
       next-server {{ bootstrapper_ip | ansible.utils.ipaddr('address') }};
       if substring(option vendor-class-identifier, 0, 20) = "PXEClient:Arch:00000" {

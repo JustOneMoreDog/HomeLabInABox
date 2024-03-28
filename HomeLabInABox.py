@@ -10,7 +10,7 @@ import time
 from rich import print
 import random
 import string
-import crypt
+from passlib.hash import sha512_crypt
 import base64
 import stat
 from cryptography.hazmat.primitives import serialization
@@ -74,10 +74,9 @@ class HomeLabInABox:
         Returns: tuple: The generated password and its SHA512 hash.
         """
         characters = string.ascii_letters + string.digits
-        salt = base64.urlsafe_b64encode(os.urandom(8)).decode()
         password = ''.join(random.choice(characters) for _ in range(12))
         self.plaintext_secret_to_file("root_password", password, "The root password for the hypervisor")
-        password_hash = crypt.crypt(password, f"$6${salt}$")
+        password_hash = sha512_crypt.using(rounds=5000).hash(password)
         return password_hash
     
     def plaintext_secret_to_file(self, name: str, secret: any, description: str) -> None:
@@ -100,6 +99,11 @@ class HomeLabInABox:
             "secret": secret,
             "description": description
         }
+        for i, secret in enumerate(secrets_data['Secrets']):
+            if secret["name"] == name:
+                logging.warning(f"Secret '{name}' already exists in '{secrets_file_path}'. Overwriting it.")
+                del secrets_data["Secrets"][i]
+                break
         secrets_data['Secrets'].append(secret_data)
         self.save_yaml(secrets_file_path, secrets_data)
         logging.info(f"Secret '{name}' written to '{secrets_file_path}'")
@@ -113,7 +117,9 @@ class HomeLabInABox:
         public_key_path = os.path.abspath(os.path.join("files", "ansible_id_rsa.pub"))
         if os.path.exists(private_key_path) and os.path.exists(public_key_path):
             logging.info("Ansible SSH keypair already exists")
-            return
+            with open(public_key_path, "r") as f:
+                public_key = f.read()
+            return public_key
         logging.info("Generating Ansible SSH keypair")
         key = rsa.generate_private_key(
             public_exponent=65537,
@@ -124,22 +130,21 @@ class HomeLabInABox:
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption()
-        )
+        ).decode('utf-8')
         public_key = key.public_key().public_bytes(
             encoding=serialization.Encoding.OpenSSH,
             format=serialization.PublicFormat.OpenSSH
-        )
+        ).decode('utf-8')
         logging.info("Saving Ansible SSH keypair to files directory")
-        with open(private_key_path, "wb") as f:
+        with open(private_key_path, "w") as f:
             f.write(private_key)
             # Equivalent to 600
             os.chmod(f.name, stat.S_IRUSR | stat.S_IWUSR)
-        with open(public_key_path, "wb") as f:
+        with open(public_key_path, "w") as f:
             f.write(public_key)
             # Equivalent to 644
             os.chmod(f.name, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
-        public_key_string = public_key.decode('utf-8')
-        return public_key_string
+        return public_key
 
     def get_all_modules(self) -> list[dict]:
         """Gets all the modules from the Modules directory.
@@ -213,20 +218,18 @@ class HomeLabInABox:
             play["vars"] = self.configuration_variables
         return playbook_data
 
-    def get_module_inventory(self, playbook: list[dict]) -> str:
-        """Gets the inventory file for the given module. If the module's playbook targets localhost then we use a dummy /dev/null inventory file. Otherwise we use our dynamic inventory file powered by Terraform.
+    def get_module_inventory(self, module_name: str) -> str:
+        """Gets the inventory file for the given module. If it is the Bootstrapper, FAI, or Proxmox module, then we use our basic inventory file. Otherwise we use our dynamic inventory file powered by Terraform.
         
-        Args: playbook (list): The playbook for the module.
+        Args: module_name (str): The name of the module we are getting the inventory file for.
         
         Returns: str: The inventory file for the module.
         """
-        just_local_host = True
-        for play in playbook:
-            if play["hosts"] != "localhost":
-                just_local_host = False
-        if not just_local_host:
+        logging.info(f"Getting inventory file for '{module_name}'")
+        if module_name in ["Bootstrapper", "FAI", "Proxmox"]:
+            return self.generate_inventory_file()
+        else:
             return self.terraform_inventory
-        return "/dev/null"
 
     def execute_ansible_playbooks(self, modules: list[str]) -> None:
         """Gets a module's playbook and inventory file and passes it to our Ansible wrapper which will execute it with the current working directory being the root directory of the project.
@@ -237,7 +240,7 @@ class HomeLabInABox:
         """
         for module in modules:
             playbook = self.get_module_playbook(module)
-            inventory = self.get_module_inventory(playbook)
+            inventory = self.get_module_inventory(module)
             ansible_runner = AnsibleWrapper(
                 inventory=inventory,
                 playbook=playbook,
@@ -535,9 +538,35 @@ class HomeLabInABox:
         logging.info("Generating random password for root user on hypervisor")
         root_password_hash = self.generate_and_hash_password() 
         self.configuration_variables["root_password_hash"] = root_password_hash
-        logging.info("Generating Ansible SSH keypair")
         ansible_public_key = self.generate_ansible_ssh_keypair()
         self.configuration_variables["ansible_public_key"] = ansible_public_key
+
+    def generate_inventory_file(self) -> str:
+        """Generates the inventory file for Ansible
+        
+        Returns: The path to the generated inventory file.
+        """
+        logging.info("Generating inventory file")
+        inventory = {
+            "bootstrapper": {
+                'hosts': {
+                    'localhost': None
+                }
+            },
+            "hypervisors": {
+                "hosts": {
+                    f"{self.configuration_variables['pve_hostname']}": {
+                        "ansible_host": f"{self.configuration_variables['pve_ip_address']}",
+                        "ansible_ssh_private_key_file": f"{os.path.abspath(os.path.join('files', 'ansible_id_rsa'))}",
+                        "ansible_user": "ansible",
+                        "ansible_connection": "ssh",
+                    }
+                }
+            }
+        }
+        inventory_path = os.path.abspath(os.path.join("inventory", "initial_inventory.yaml"))
+        self.save_yaml(inventory_path, inventory)
+        return inventory_path
 
     def deploy_homelab(self, debug_playbook: str = "") -> None:
         """Main execution logic for the project.

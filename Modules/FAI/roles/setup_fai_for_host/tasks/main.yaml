@@ -1,0 +1,80 @@
+# - name: Run FAI Setup To Make Our Initial Files (This takes a while...)
+#   command: fai-setup -v -f
+#   retries: 2
+#   delay: 3
+
+- name: Copy fai.conf inside nfsroot
+  copy:
+    src: /etc/fai/fai.conf
+    dest: /srv/fai/nfsroot/etc/fai/fai.conf
+    owner: fai
+    group: pxeusers
+    mode: preserve
+
+- name: Modify FAI ssh_config
+  copy: 
+    dest: /srv/fai/nfsroot/root/.ssh/ssh_config
+    content: |
+      Host {{ bootstrapper_ip | ansible.utils.ipaddr('address') }}
+        StrictHostKeyChecking no
+        UserKnownHostsFile /dev/null
+    mode: 0644
+    owner: root
+    group: root
+
+- name: Modify existing lines in /etc/exports
+  lineinfile:
+    path: /etc/exports
+    regexp: '^({{ item }}).*{{ bootstrapper_ip | ansible.utils.ipaddr("address/prefix") }}(.*)$'
+    line: '\1 {{ bootstrapper_ip | ansible.utils.ipaddr("network/prefix") }}\2'
+    state: present
+    backrefs: true
+    create: true
+    mode: 0644
+  loop:
+    - '/srv/fai/config'
+    - '/srv/fai/nfsroot'
+
+- name: Get kernel and initrd files in TFTP directory
+  find:
+    paths: /srv/tftp/fai/
+    patterns: ["vmlinuz-*", "initrd.img-*"]
+    file_type: file
+  register: old_boot_files
+
+- name: Remove old kernel and initrd files in TFTP directory
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ old_boot_files.files }}"
+  when: item.path is regex('^/srv/tftp/fai/(vmlinuz|initrd\.img)-(\d+\.\d+\.\d+)-')
+
+- name: Get latest kernel and initrd versions in boot directory
+  find:
+    paths: /boot
+    patterns: ["vmlinuz-*", "initrd.img-*"]
+    file_type: file
+  register: boot_files
+
+- name: Copy latest kernel and initrd to TFTP directory
+  copy:
+    src: "{{ item.path }}"
+    dest: /srv/tftp/fai/
+    mode: preserve
+    owner: fai
+    group: pxeusers
+  loop: "{{ boot_files.files }}"
+  when: item.path is regex('^/boot/(vmlinuz|initrd\.img)-(\d+\.\d+\.\d+)-')
+
+- name: Initialize Bootloader config for hypervisor
+  command: "fai-chboot -v -I -f verbose,sshd,reboot -u nfs://{{ bootstrapper_ip | ansible.utils.ipaddr('address') }}/srv/fai/config {{ host_hostname }}"
+
+# Do not remove this. I have no idea why we have to run fai-setup twice but we just do. Otherwise it drops us into an initramfs shell and honestly I don't have time to figure out why.
+# - name: Run FAI Setup To Finalize Installation Files (This takes a while...)
+#   command: fai-setup -v -f
+#   retries: 2
+#   delay: 3
+
+- name: Ensure all services are working
+  include_role:
+    name: restart_pxe_services

@@ -1,3 +1,13 @@
+- name: Give FAI Ownership of TFTP and NFS directories
+  file:
+    path: "{{ item }}"
+    owner: fai
+    group: pxeusers
+    recurse: true
+  loop:
+    - /srv/tftp
+    - /srv/fai/config
+
 - name: Restart DHCP
   service:
     name: isc-dhcp-server

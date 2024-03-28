@@ -1,3 +1,9 @@
+- name: Remove Entry If Exists
+  lineinfile:
+    path: /etc/hosts
+    regexp: '^.*{{ hostname }}$'
+    state: absent
+
 - name: Update /etc/hosts file
   lineinfile:
     path: /etc/hosts

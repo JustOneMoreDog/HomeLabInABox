@@ -39,6 +39,7 @@ class AnsibleWrapper:
                 quiet=True
             )
         if runner.rc != 0:
+            # TO-DO: Implement an async function that creates a folder called latest that always points to the latest ansible-runner log and then if we end up here we can use that log directory to pull out the stdout, stderr, and rc information for the user to see what went wrong.
             raise AnsibleRunTimeExecution("Ansible runner returned a non-zero exit code which means that an exception occurred during the playbook run that we did not catch with our event handler. This is very bad.")
         
     def runner_event_callback(self, event: dict) -> None:

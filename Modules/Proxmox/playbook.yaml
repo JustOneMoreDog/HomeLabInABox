@@ -1,4 +1,4 @@
-- hosts: localhost
+- hosts: bootstrapper
   connection: local
   tasks:
     - name: Update /etc/hosts file
@@ -18,10 +18,54 @@
         mac_address: "{{ pve_mac_address }}"
         remove: false
 
-    - name: Initialize Bootloader config for hypervisor
-      command: "fai-chboot -v -I -B -u nfs://{{ bootstrapper_ip | ansible.utils.ipaddr('address') }}/srv/fai/config {{ pve_hostname }}"
+    - name: Prepare FAI for Proxmox
+      include_role:
+        name: setup_fai_for_host
+      vars:
+        host_hostname: "{{ pve_hostname }}"
 
-    - name: Send wake on LAN packet to hypervisor
+    - name: Send wake on LAN packet to hypervisor (Power it on manually if you do not see it turn on)
       wakeonlan:
         mac: "{{ pve_mac_address }}"
         broadcast: "{{ bootstrapper_ip | ansible.utils.ipaddr('broadcast') }}"
+
+    # - name: Sleeping for 3 minutes to allow FAI to perform installation tasks
+    #   pause:
+    #     seconds: 180
+
+- hosts: hypervisors
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Wait for hypervisor to finish installing
+      wait_for_connection:
+        timeout: 300
+        delay: 10
+        connect_timeout: 3
+
+    - name: Verify we are not still installing by checking for file
+      stat:
+        path: /.THIS_IS_THE_FAI_NFSROOT
+      register: install_env
+
+    - name: Sleep for 60 seconds to allow for reboot process to complete
+      pause:
+        seconds: 60
+      when: install_env.stat.exists
+
+    - name: Wait for hypervisor to boot
+      wait_for_connection:
+        timeout: 300
+        delay: 10
+        connect_timeout: 3
+      when: install_env.stat.exists
+
+    - name: Gather facts
+      setup:
+
+    - name: Hello World!
+      shell: echo "Hello World!"
+
+    - name: Perform post install cleanup
+      include_role:
+        name: fai_post_install_cleanup

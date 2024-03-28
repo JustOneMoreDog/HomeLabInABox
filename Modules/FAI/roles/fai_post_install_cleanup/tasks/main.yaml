@@ -1,0 +1,35 @@
+- name: Remove the demo user if it exists
+  user:
+    name: demo
+    state: absent
+    remove: yes
+    force: yes
+
+- name: Remove the demo group if it exists
+  group:
+    name: demo
+    state: absent
+    force: yes
+
+- name: Remove the demo home directory if it exists
+  file:
+    path: /home/demo
+    state: absent
+    force: yes
+
+- name: Update the root password
+  user:
+    name: root
+    password: "{{ root_password_hash }}"
+    update_password: always
+
+- name: Perform any updates
+  apt:
+    update_cache: yes
+    upgrade: full
+    autoremove: yes
+    autoclean: yes
+
+- name: Ensure hostname is set
+  hostname:
+    name: "{{ inventory_hostname }}"
